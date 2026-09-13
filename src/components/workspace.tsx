@@ -179,7 +179,7 @@ export function Workspace({
     });
     if (!ok && current())
       setMessage(
-        "Results retained. History or allowance could not refresh; reload to update them.",
+        "Results retained. History or usage could not refresh; reload to update them.",
       );
   }
   async function run(
@@ -476,7 +476,11 @@ export function Workspace({
                 <input
                   id="subject"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    selectionVersion.current += 1;
+                    setLastOp(null);
+                    setSearch(e.target.value);
+                  }}
                   placeholder="Search a FOMO handle"
                   required
                 />
@@ -796,22 +800,21 @@ export function Workspace({
             <section className="card">
               <div className="panel-top">
                 <h2>One observation at a time.</h2>
-                <label>
-                  Window{" "}
-                  <select
-                    value={window}
-                    onChange={(e) => {
-                      selectionVersion.current += 1;
-                      setLastOp(null);
-                      setWindow(e.target.value as typeof window);
-                      setLeaderboard(null);
-                    }}
-                  >
-                    {windows.map((w) => (
-                      <option key={w}>{w}</option>
-                    ))}
-                  </select>
-                </label>
+                <label htmlFor="leaderboard-window">Window</label>
+                <select
+                  id="leaderboard-window"
+                  value={window}
+                  onChange={(e) => {
+                    selectionVersion.current += 1;
+                    setLastOp(null);
+                    setWindow(e.target.value as typeof window);
+                    setLeaderboard(null);
+                  }}
+                >
+                  {windows.map((w) => (
+                    <option key={w}>{w}</option>
+                  ))}
+                </select>
               </div>
               <button
                 className="primary"
