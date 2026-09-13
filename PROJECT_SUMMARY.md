@@ -1,8 +1,8 @@
-# Lens Atlas status
+# Fomo Lens status
 
 Updated 2026-09-10.
 
-Lens Atlas is an independent research application. This repository is an implementation checkpoint, not a completed or deployed release.
+Fomo Lens is an independent research application. This repository is an implementation checkpoint, not a completed or deployed release.
 
 ## Written
 

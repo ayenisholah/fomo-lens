@@ -9,7 +9,7 @@ export default function Privacy() {
         <span className="eyebrow">PRIVACY</span>
         <h1>Your research stays yours.</h1>
         <p>
-          Lens Atlas stores your verified email, signup and login times, access
+          Fomo Lens stores your verified email, signup and login times, access
           approval, private research parameters, and minimal activity events.
           Your research history is accessible only through your session. Owners
           can see user accounts and aggregate application adoption.

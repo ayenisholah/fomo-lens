@@ -1,12 +1,12 @@
-# Lens Atlas — resume here
+# Fomo Lens — resume here
 
-Checkpoint date: 2026-09-10. Repository: https://github.com/ayenisholah/lens-atlas. Workspace: /Users/Dijha/shola/fomolens.
+Checkpoint date: 2026-09-10. Repository: https://github.com/ayenisholah/fomo-lens. Workspace: /Users/Dijha/shola/fomolens.
 
 The user asked to pause, prepare handoff/changelog documents, and commit/push all checkpoint changes without ChatGPT attribution. This is **unfinished implementation**, not a release.
 
 ## User decisions that persist
 
-- Implement the full Lens Atlas product plan; retain this isolated repository and workspace.
+- Implement the full Fomo Lens product plan; retain this isolated repository and workspace.
 - Use **Prisma**, replacing the original plan's Drizzle ORM.
 - Use the **latest stable Next.js App Router**: registry confirmed Next.js 16.3.4 during this session.
 - **Do not install Docker locally.** The user will provision a server and provide full access later. Install and rehearse Docker there.

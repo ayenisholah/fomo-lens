@@ -75,9 +75,9 @@ export const deliver: Delivery = async (email, code, challenge) => {
     {
       from: c.RESEND_FROM,
       to: email,
-      subject: "Your Lens Atlas verification code",
+      subject: "Your Fomo Lens verification code",
       text:
-        "Your Lens Atlas code is " +
+        "Your Fomo Lens code is " +
         code +
         ". It expires in ten minutes. Signing in creates a seven-day session. If you did not request this, ignore this email.",
     },

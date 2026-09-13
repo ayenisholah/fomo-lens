@@ -1,0 +1,8 @@
+[Unit]
+Description=Fomo Lens encrypted database backup
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fomo-lens
+EnvironmentFile=/opt/fomo-lens/ops.env
+ExecStart=/bin/bash /opt/fomo-lens/ops/backup.sh
+User=fomo-lens-deploy

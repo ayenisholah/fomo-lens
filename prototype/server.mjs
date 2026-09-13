@@ -16,4 +16,4 @@ createServer(async (req, res) => {
   if (!file.startsWith(root)) { res.writeHead(404); return res.end('Not found'); }
   try { const body = await readFile(file); res.writeHead(200, {'Content-Type': types[extname(file)] || 'text/plain'}); res.end(body); }
   catch { res.writeHead(404); res.end('Not found'); }
-}).listen(process.env.PORT || 3000, '127.0.0.1', () => console.log('Lens Atlas → http://localhost:3000'));
+}).listen(process.env.PORT || 3000, '127.0.0.1', () => console.log('Fomo Lens → http://localhost:3000'));

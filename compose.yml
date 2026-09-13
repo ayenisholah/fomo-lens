@@ -1,4 +1,4 @@
-name: lens-atlas
+name: fomo-lens
 x-logging: &logging
   driver: json-file
   options:
@@ -21,7 +21,7 @@ services:
       timeout: 5s
       retries: 5
   app:
-    image: lens-atlas:${RELEASE:?set exact release commit}
+    image: fomo-lens:${RELEASE:?set exact release commit}
     env_file: .env
     networks: [private, egress]
     depends_on:
@@ -32,7 +32,7 @@ services:
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
   ops:
-    image: lens-atlas-ops:${RELEASE:?set exact release commit}
+    image: fomo-lens-ops:${RELEASE:?set exact release commit}
     profiles: [ops]
     env_file: .env
     networks: [private, egress]

@@ -11,11 +11,11 @@ git cat-file -e "$release^{commit}"
 previous=$(cat .release 2>/dev/null || true)
 git checkout --detach "$release"
 export RELEASE="$release"
-docker build --target runner -t "lens-atlas:$release" .
-docker build --target operations -t "lens-atlas-ops:$release" .
+docker build --target runner -t "fomo-lens:$release" .
+docker build --target operations -t "fomo-lens-ops:$release" .
 docker compose up -d db
 if [ -n "$previous" ]; then
- docker image inspect "lens-atlas:$previous" --format '{{.Id}}' > .previous-image
+ docker image inspect "fomo-lens:$previous" --format '{{.Id}}' > .previous-image
  bash ops/backup.sh
 fi
 docker compose --profile ops run --rm ops

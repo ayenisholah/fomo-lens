@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily Lens Atlas retention cleanup
+Description=Daily Fomo Lens retention cleanup
 [Timer]
 OnCalendar=*-*-* 03:15:00 UTC
 Persistent=true

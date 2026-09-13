@@ -16,7 +16,7 @@ Caddy overwrites X-Atlas-Client-IP. Never expose the application or PostgreSQL d
 
 Inspect OS, architecture, memory/disk, existing services, and firewall first. Verify SSH host keys. Prefer a supported Ubuntu LTS for a new server. Install official supported Docker Engine and Compose there, create a dedicated deployment account, and allow SSH/HTTP/HTTPS only as appropriate.
 
-Clone the dedicated public repository into /opt/lens-atlas. Protect runtime .env and ops.env. Configure DNS and a verified Resend sender. Configure encrypted off-server backups and a deletion contact/retention policy before launch.
+Clone the dedicated public repository into /opt/fomo-lens. Protect runtime .env and ops.env. Configure DNS and a verified Resend sender. Configure encrypted off-server backups and a deletion contact/retention policy before launch.
 
 ## Deployment drafts
 

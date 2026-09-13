@@ -64,7 +64,7 @@ export function Signin() {
   return (
     <section className="auth-card">
       <span className="eyebrow">YOUR RESEARCH STARTS HERE</span>
-      <h1>{challenge ? "Check your inbox." : "Welcome to Lens Atlas."}</h1>
+      <h1>{challenge ? "Check your inbox." : "Welcome to Fomo Lens."}</h1>
       <p>
         {challenge
           ? "Enter the six-digit code sent to " + email
@@ -140,9 +140,8 @@ export function Signin() {
         {error}
       </p>
       <p className="fine">
-        Your sign-in lasts seven days. Codes expire after ten minutes. Lens
-        Atlas registration does not create a Fomolens account or credit
-        allowance.
+        Your sign-in lasts seven days. Codes expire after ten minutes. Fomo
+        Lens registration does not create a Fomolens account or credit allowance.
       </p>
     </section>
   );

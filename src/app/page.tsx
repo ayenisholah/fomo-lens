@@ -30,7 +30,7 @@ export default function Home() {
           </p>
           <div className="hero-actions">
             <Link className="button primary" href="/signin?returnTo=/app">
-              Explore Lens Atlas <span aria-hidden="true">↗</span>
+              Explore Fomo Lens <span aria-hidden="true">↗</span>
             </Link>
             <a className="text-link" href="/methodology">
               Understand the evidence →
@@ -85,9 +85,9 @@ export default function Home() {
         <section className="independence">
           <h2>Context over conviction.</h2>
           <p>
-            Lens Atlas is an independent application designed for use with
+            Fomo Lens is an independent application designed for use with
             Fomolens data. It is not affiliated with or endorsed by Fomolens or
-            FOMO. Registration provides Lens Atlas access only; it does not
+            FOMO. Registration provides Fomo Lens access only; it does not
             create an upstream account or API allowance.
           </p>
         </section>

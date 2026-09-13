@@ -9,7 +9,7 @@ export default function Methodology() {
         <span className="eyebrow">METHODOLOGY</span>
         <h1>Evidence, with its limits.</h1>
         <p>
-          Lens Atlas brings identity observations together so you can examine
+          Fomo Lens brings identity observations together so you can examine
           their context. It does not score traders, recommend trades, or
           estimate investment suitability.
         </p>

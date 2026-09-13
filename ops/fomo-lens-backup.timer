@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily Lens Atlas backup
+Description=Daily Fomo Lens backup
 [Timer]
 OnCalendar=*-*-* 02:15:00 UTC
 Persistent=true

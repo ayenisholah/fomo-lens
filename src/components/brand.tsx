@@ -1,11 +1,11 @@
 import Link from "next/link";
 export function Brand() {
   return (
-    <Link className="brand" href="/" aria-label="Lens Atlas home">
+    <Link className="brand" href="/" aria-label="Fomo Lens home">
       <span className="brand-mark" aria-hidden="true">
         ◉
       </span>{" "}
-      Lens <strong>Atlas</strong>
+      Fomo <strong>Lens</strong>
       <span className="beta">RESEARCH</span>
     </Link>
   );

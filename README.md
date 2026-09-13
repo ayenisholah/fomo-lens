@@ -1,4 +1,4 @@
-# Lens Atlas
+# Fomo Lens
 
 A multi-user research application for exploring trader identities, observed connections, wallet mappings, and sampled PnL.
 
@@ -29,7 +29,7 @@ Open http://localhost:3000. Public synthetic workspace: http://localhost:3000/ex
 - `example` (default): deterministic synthetic data; no upstream research calls.
 - `stored`: requires an API key and explicit per-user approval. **Dispatch is currently disabled** because the documented wire adapter is not implemented. The authoritative docs and schemas have now been located; see [contract notes](docs/fomolens-contract-notes.md).
 
-Signing up to Lens Atlas creates no Fomolens account or allowance. No wallet connection, trade execution, scanning, polling, or background enrichment is included.
+Signing up to Fomo Lens creates no Fomolens account or allowance. No wallet connection, trade execution, scanning, polling, or background enrichment is included.
 
 ## Commands
 
