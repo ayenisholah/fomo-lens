@@ -1,0 +1,8 @@
+[Unit]
+Description=Lens Atlas encrypted database backup
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/lens-atlas
+EnvironmentFile=/opt/lens-atlas/ops.env
+ExecStart=/bin/bash /opt/lens-atlas/ops/backup.sh
+User=atlas-deploy

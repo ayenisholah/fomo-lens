@@ -1,0 +1,64 @@
+name: lens-atlas
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: [postgres:/var/lib/postgresql/data]
+    networks: [private]
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  app:
+    image: lens-atlas:${RELEASE:?set exact release commit}
+    env_file: .env
+    networks: [private, egress]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+  ops:
+    image: lens-atlas-ops:${RELEASE:?set exact release commit}
+    profiles: [ops]
+    env_file: .env
+    networks: [private, egress]
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?required}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      [
+        "./ops/Caddyfile:/etc/caddy/Caddyfile:ro",
+        "caddy_data:/data",
+        "caddy_config:/config",
+      ]
+    networks: [private, egress]
+    restart: unless-stopped
+    logging: *logging
+networks:
+  private:
+    internal: true
+  egress: {}
+volumes:
+  postgres: {}
+  caddy_data: {}
+  caddy_config: {}

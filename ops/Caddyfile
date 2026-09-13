@@ -1,0 +1,11 @@
+{$DOMAIN} {
+ encode zstd gzip
+ request_body {
+  max_size 8KB
+ }
+ reverse_proxy app:3000 {
+  header_up X-Atlas-Client-IP {remote_host}
+  header_up -X-Forwarded-For
+ }
+ header Strict-Transport-Security "max-age=31536000"
+}

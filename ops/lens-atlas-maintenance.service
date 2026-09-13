@@ -1,0 +1,8 @@
+[Unit]
+Description=Lens Atlas retention cleanup
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/lens-atlas
+EnvironmentFile=/opt/lens-atlas/ops.env
+ExecStart=/bin/sh -c 'RELEASE=$(cat .release) docker compose --profile ops run --rm ops npx tsx scripts/maintenance.ts'
+User=atlas-deploy
