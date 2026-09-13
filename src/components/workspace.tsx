@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useSyncExternalStore } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   applyResearchResult,
@@ -57,6 +57,9 @@ const time = (s: string | null | undefined) =>
   s
     ? new Date(s).toISOString().replace("T", " ").replace(".000Z", " UTC")
     : "Unavailable";
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
 export function Workspace({
   account,
   publicExample = false,
@@ -65,7 +68,11 @@ export function Workspace({
   publicExample?: boolean;
 }) {
   const query = useSearchParams();
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    clientHydrated,
+    serverHydrated,
+  );
   const router = useRouter();
   const selectionVersion = useRef(0);
   const pending = useRef(false);
@@ -112,7 +119,6 @@ export function Workspace({
     [address, setAddress] = useState(""),
     [lastOp, setLastOp] = useState<Op | null>(null);
   useEffect(() => {
-    setHydrated(true);
     if (publicExample) return;
     let active = true;
     void refreshResearchMetadata({

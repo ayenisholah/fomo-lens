@@ -48,6 +48,21 @@ source /etc/fomo-lens/app.env
 set +a
 (cd "$release" && npm run db:migrate)
 old=$(readlink -f "$root/current" || true)
+if [[ -z "$old" || ! -d "$old" ]]; then
+  port=3001
+  while ss -H -ltn "sport = :$port" | grep -q .; do
+    ((port += 1))
+    ((port <= 3999)) || { echo 'No free application port'; exit 1; }
+  done
+  mkdir -p /etc/systemd/system/fomo-lens.service.d
+  printf '[Service]\nEnvironment=PORT=%s\n' "$port" > /etc/systemd/system/fomo-lens.service.d/port.conf
+  printf 'FOMO_LOCAL_HEALTH_URL=http://127.0.0.1:%s/api/health/ready\n' "$port" > /etc/fomo-lens/deploy.env
+  sed -i -E "s@proxy_pass http://127.0.0.1:[0-9]+;@proxy_pass http://127.0.0.1:$port;@" /etc/nginx/conf.d/fomo-lens.conf
+  nginx -t
+  systemctl reload nginx
+  systemctl daemon-reload
+  source /etc/fomo-lens/deploy.env
+fi
 arm_release_recovery "$old"
 switch_release "$release"
 systemctl restart fomo-lens

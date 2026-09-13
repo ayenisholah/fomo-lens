@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Sourced by deployment and rollback.
+if [[ "${root:-/opt/fomo-lens}" == /opt/fomo-lens && -f /etc/fomo-lens/deploy.env ]]; then
+  source /etc/fomo-lens/deploy.env
+fi
 ready() {
   local attempt
   for attempt in {1..20}; do
