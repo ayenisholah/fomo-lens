@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#10110f">
+  <title>Lens Atlas — Trader intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="noise"></div>
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark">◉</span><span>lens<br><em>atlas</em></span></a><div class="breadcrumb"><span class="live-dot"></span> FOMO INTELLIGENCE <span class="slash">/</span> EXAMPLE MODE</div><nav><a href="#map">Explore</a><a href="#method">Method</a><button class="ghost-button" id="shareBtn">Share view <span>↗</span></button></nav></header>
+<main>
+  <section class="hero"><div class="eyebrow">A research layer for social trading</div><h1>Find the signal<br><span>behind the flex.</span></h1><p class="hero-copy">Trace a FOMO handle through its wallets, observed connections, and sampled performance. Build a sharper shortlist before you make a move.</p><form class="search" id="searchForm"><span class="search-icon">⌕</span><input id="handleInput" value="example_trader" aria-label="FOMO handle"><button>Map trader <span>→</span></button></form><div class="hero-note"><span class="pill">NO KEY NEEDED</span> Public demo uses stored example observations. No credits used.</div></section>
+  <section class="stats-strip"><div><strong>391,004</strong><span>matched users</span></div><div><strong>292,350</strong><span>Solana wallets</span></div><div><strong>296,551</strong><span>EVM mappings</span></div><div class="updated"><span class="live-dot"></span> Updated 11:03:24<br><small>refreshes every minute</small></div></section>
+  <section class="workspace" id="map"><div class="section-heading"><div><div class="eyebrow">01 / The map</div><h2>One handle.<br><span>A whole orbit.</span></h2></div><div class="heading-aside">The graph shows observed relationships, not endorsements. Select a node to inspect its evidence.</div></div><div class="dashboard-grid"><div class="graph-card"><div class="card-top"><span class="card-label">OBSERVED SOCIAL GRAPH</span><span class="status"><i></i> 4 nodes in view</span></div><div class="graph" id="graph"></div><div class="graph-legend"><span><i class="legend-core"></i> selected trader</span><span><i class="legend-node"></i> observed connection</span><span><i class="legend-line"></i> observed following</span></div></div><aside class="dossier" id="dossier"></aside></div></section>
+  <section class="performance" id="method"><div class="section-heading compact"><div><div class="eyebrow">02 / Evidence</div><h2>Performance,<br><span>with receipts.</span></h2></div><div class="window-tabs" id="windowTabs"><button class="active" data-window="24h">24H</button><button data-window="7d">7D</button><button data-window="30d">30D</button><button data-window="all">ALL TIME</button></div></div><div class="evidence-grid"><div class="pnl-card" id="pnlCard"></div><div class="signal-card" id="signalCard"></div></div></section>
+  <section class="compare-section"><div class="section-heading compact"><div><div class="eyebrow">03 / Shortlist</div><h2>Compare the<br><span>neighbours.</span></h2></div><div class="heading-aside">A good score is a prompt for research, not a promise of returns.</div></div><div class="compare-grid" id="compareGrid"></div></section>
+</main>
+<footer><div class="brand"><span class="brand-mark">◉</span><span>lens<br><em>atlas</em></span></div><span>Independent research interface for Fomolens.</span><span>Example observations · 2026</span></footer><div class="toast" id="toast">Link copied to clipboard</div>
+<script src="/app.js"></script>
+</body></html>
