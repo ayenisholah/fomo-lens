@@ -1,0 +1,91 @@
+generator client {
+ provider = "prisma-client"
+ output = "../src/generated/prisma"
+}
+datasource db {
+ provider = "postgresql"
+}
+model User {
+ id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+ email String @unique
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+ lastLoginAt DateTime @default(now()) @map("last_login_at") @db.Timestamptz
+ storedApproved Boolean @default(false) @map("stored_approved")
+ sessions Session[]
+ operations ResearchOperation[]
+ events ActivityEvent[]
+ @@map("users")
+}
+model AuthChallenge {
+ id String @id @db.Uuid
+ email String
+ codeHash String @map("code_hash")
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+ expiresAt DateTime @map("expires_at") @db.Timestamptz
+ attempts Int @default(0)
+ deliveredAt DateTime? @map("delivered_at") @db.Timestamptz
+ consumedAt DateTime? @map("consumed_at") @db.Timestamptz
+ supersededAt DateTime? @map("superseded_at") @db.Timestamptz
+ @@index([email,createdAt(sort: Desc)],map:"challenges_email")
+ @@map("auth_challenges")
+}
+model Session {
+ id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+ userId String @map("user_id") @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ tokenHash String @unique @map("token_hash")
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+ expiresAt DateTime @map("expires_at") @db.Timestamptz
+ @@map("sessions")
+}
+model RateLimitBucket {
+ key String @id
+ count Int
+ expiresAt DateTime @map("expires_at") @db.Timestamptz
+ @@map("rate_limit_buckets")
+}
+model ResearchOperation {
+ id String @id @db.Uuid
+ userId String @map("user_id") @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ actionId String @map("action_id") @db.Uuid
+ mode String
+ kind String
+ params Json
+ upstreamUrl String? @map("upstream_url")
+ status String
+ reservedCredits Int @default(0) @map("reserved_credits")
+ actualCredits Int? @map("actual_credits")
+ requestId String? @map("request_id")
+ errorCode String? @map("error_code")
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+ updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+ @@unique([userId,id])
+ @@index([userId,createdAt(sort: Desc)],map:"operations_owner_time")
+ @@map("research_operations")
+}
+model BudgetBucket {
+ key String @id
+ day String
+ requests Int @default(0)
+ credits Int @default(0)
+ @@map("budget_buckets")
+}
+model ActivityEvent {
+ id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+ userId String @map("user_id") @db.Uuid
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ type String
+ mode String?
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+ @@index([userId,createdAt(sort: Desc)],map:"events_owner_time")
+ @@map("activity_events")
+}
+model AccountingRetention {
+ operationId String @id @map("operation_id") @db.Uuid
+ reservedCredits Int @map("reserved_credits")
+ actualCredits Int? @map("actual_credits")
+ createdAt DateTime @map("created_at") @db.Timestamptz
+ reason String
+ @@map("accounting_retention")
+}
