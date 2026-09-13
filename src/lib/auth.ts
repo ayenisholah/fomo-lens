@@ -1,4 +1,5 @@
 import "server-only";
+import { verificationEmail } from "../../ops/email-template.mjs";
 import { randomInt, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { Resend } from "resend";
@@ -13,7 +14,7 @@ export const isOwner = (email: string) =>
   config().ADMIN_EMAILS.split(",").map(normalizeEmail).includes(email);
 type Tx = Prisma.TransactionClient;
 export async function lock(tx: Tx, key: string) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key},0))`;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key},0))::text`;
 }
 export async function limit(
   key: string,
@@ -76,10 +77,7 @@ export const deliver: Delivery = async (email, code, challenge) => {
       from: c.RESEND_FROM,
       to: email,
       subject: "Your Fomo Lens verification code",
-      text:
-        "Your Fomo Lens code is " +
-        code +
-        ". It expires in ten minutes. Signing in creates a seven-day session. If you did not request this, ignore this email.",
+      ...verificationEmail(code),
     },
     { idempotencyKey: challenge },
   );
@@ -150,7 +148,7 @@ export async function requestCode(
         supersededAt: null,
       },
     });
-    await tx.authChallenge.update({
+    await tx.authChallenge.updateMany({
       where: { id },
       data: {
         deliveredAt: new Date(),
@@ -185,6 +183,9 @@ export async function verifyCode(
   const sessionToken = token();
   const result = await db().$transaction(async (tx) => {
     await lock(tx, "challenge:" + id);
+    const hint = await tx.authChallenge.findUnique({ where: { id } });
+    if (!hint) return { error: "invalid_code" as const };
+    await lock(tx, "email:" + hint.email);
     const ch = await tx.authChallenge.findUnique({ where: { id } });
     if (
       !ch ||
@@ -272,6 +273,8 @@ export async function signout(raw: string | undefined) {
       where: { tokenHash: digest(raw) },
     });
     if (s) {
+      await lock(tx, "approval:" + s.userId);
+      if (!(await tx.user.findUnique({ where: { id: s.userId } }))) return;
       await tx.session.deleteMany({ where: { id: s.id } });
       await tx.activityEvent.create({
         data: { userId: s.userId, type: "signout" },

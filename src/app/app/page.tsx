@@ -11,7 +11,7 @@ export default async function Page() {
       account={{
         email: user.email,
         owner: isOwner(user.email),
-        mode: effectiveMode(user),
+        mode: effectiveMode(),
       }}
     />
   );

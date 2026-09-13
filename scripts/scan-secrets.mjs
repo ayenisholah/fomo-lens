@@ -1,31 +1,45 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
-const names = execFileSync(
-  "git",
-  ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-  { encoding: "utf8" },
-)
-  .split("\0")
-  .filter(Boolean);
-const patterns = [
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-  /\b(?:re_[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{30,})\b/,
-  /(?:AUTH_SECRET|IP_HASH_SECRET|CURSOR_SECRET|FOMOLENS_KEY|RESEND_API_KEY)\s*=\s*["']?[A-Za-z0-9_\-]{24,}/,
-];
-const bad = [];
-for (const name of names) {
-  if (/(^|\/)\.env(?!\.example$)/.test(name)) {
-    bad.push(name);
-    continue;
-  }
-  if (!statSync(name).isFile() || statSync(name).size > 2000000) continue;
-  const text = readFileSync(name, "utf8");
-  if (patterns.some((p) => p.test(text))) bad.push(name);
+import {
+  environmentSources,
+  secretValues,
+  walk,
+  scanFiles,
+  archiveFiles,
+} from "./secret-scan-core.mjs";
+try {
+  const build = process.argv.includes("--build");
+  const files = [
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.production.local",
+    ".env.development",
+    ".env.development.local",
+    ".env.test",
+    ".env.test.local",
+  ].map((path) => ({ path }));
+  if (process.env.SECRET_SCAN_ENV_FILE)
+    files.push({ path: process.env.SECRET_SCAN_ENV_FILE, required: true });
+  const values = secretValues(environmentSources(process.env, files));
+  const names = build
+    ? walk(".next")
+    : process.argv.includes("--archive")
+      ? archiveFiles(".")
+      : execFileSync(
+          "git",
+          ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+          { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+        )
+          .split("\0")
+          .filter(Boolean);
+  const result = scanFiles(names, values);
+  if (result.detected) throw Error("Potential secrets");
+  console.log(
+    `${build ? "Build" : "Source"} secret scan passed (${result.count} files; ${result.deleted} absent tracked paths).`,
+  );
+} catch {
+  console.error(
+    "Secret scan failed: detected content or incomplete coverage. Values, paths and underlying diagnostics suppressed.",
+  );
+  process.exitCode = 1;
 }
-if (bad.length) {
-  console.error("Potential secrets in: " + bad.join(", "));
-  process.exit(1);
-}
-console.log(
-  "Source secret-pattern scan passed. Review runtime/image scans separately.",
-);

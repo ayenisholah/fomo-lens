@@ -1,45 +1,47 @@
-# Operations draft — review before execution
+> Approved free-access plan (2026-09-13): no application request/credit caps. Current-key public launch is authorized after engineering checks. Historical billing restrictions below are superseded; preserve the private ledger and acceptance ceiling, and do not run paid acceptance automatically.
 
-No Docker commands have been run. The user explicitly requested that Docker not be installed locally. Use the provided server for Docker setup and rehearsal.
+> Current checkpoint (2026-09-13): implementation complete; release verification blocked. The permitted unit suite passes 91 tests across 9 files. See [../HANDOFF.md](../HANDOFF.md) for constraints and durable evidence. Operational and other verification commands below remain future reference only.
 
-## Environment
+# Native production operations
 
-Run `npm run setup` locally to create an ignored mode-0600 .env without overwriting an existing file. Configure APP_URL, DATABASE_URL, three independent secrets (AUTH_SECRET, IP_HASH_SECRET, CURSOR_SECRET), Resend sender/key, and ADMIN_EMAILS. Example is the default data mode.
+Deployment is gated on passing local and production acceptance, verified email, encrypted local backup and restore, and a maximum of 120 pre-launch credits. No public deployment has been verified yet.
 
-Production requires HTTPS APP_URL, TRUST_PROXY=true, real Resend delivery, no test capture, and protected application/database networking. Stored mode additionally requires FOMOLENS_KEY and per-user owner approval; the integration gate is currently closed.
+Use the existing Node 24, PostgreSQL 16, Nginx and Certbot. Do not change other applications, PostgreSQL listeners or networking. Inspect disk and existing Nginx IP-specific listeners first. Stop if less than 1.5 GB would remain. Clean only obsolete Fomo Lens releases/build artifacts; retain current and previous releases.
 
-Use a protected server .env outside source control and build context. Compose DATABASE_URL must use host `db` and match POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB; URL-encode any password punctuation. DOMAIN is a bare DNS hostname.
+## Provision once
 
-Caddy overwrites X-Atlas-Client-IP. Never expose the application or PostgreSQL directly to the internet. Do not put another proxy in front without revisiting IP trust. Caddy is the only service with published ports.
+Create an unprivileged system user/group `fomo-lens`, `/opt/fomo-lens/{repository,releases,ops}`, `/etc/fomo-lens`, `/var/backups/fomo-lens`, and `/var/www/fomo-lens-acme`. Clone the repository into `repository`. Install the reviewed ops scripts into `ops` as root-owned executable files. Verify `/usr/bin/node` is Node 24 (adjust service paths if the server uses a different system installation).
 
-## Server setup still required
+Create a dedicated PostgreSQL role `fomo_lens` with LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE and a generated password, and a dedicated `fomo_lens` database owned by that role. Revoke PUBLIC database/schema privileges within that database only. Connect over loopback. Never reuse the other application's database or role.
 
-Inspect OS, architecture, memory/disk, existing services, and firewall first. Verify SSH host keys. Prefer a supported Ubuntu LTS for a new server. Install official supported Docker Engine and Compose there, create a dedicated deployment account, and allow SSH/HTTP/HTTPS only as appropriate.
+Generate separate random AUTH_SECRET, IP_HASH_SECRET, CURSOR_SECRET and database password. Store shell-compatible quoted settings in `/etc/fomo-lens/app.env`, root:fomo-lens mode 0640. Set APP_URL=https://fomo-lens.sholaayeni.xyz, TRUST_PROXY=true, FOMOLENS_MODE=stored, ADMIN_EMAILS=ayenisholah@yahoo.com, RESEND_FROM='Fomo Lens <noreply@sholaayeni.xyz>', no daily usage quotas and SERVICE_CONCURRENCY=1. Supply the server-held Fomolens and Resend keys. Secrets never enter release directories or builds.
 
-Clone the dedicated public repository into /opt/fomo-lens. Protect runtime .env and ops.env. Configure DNS and a verified Resend sender. Configure encrypted off-server backups and a deletion contact/retention policy before launch.
+Install `ops/fomo-lens.service`. Immediately before initial activation check `ss -ltn 'sport = :3001'`; bind only 127.0.0.1:3001. Do not open a public application port.
 
-## Deployment drafts
+## HTTPS
 
-- `ops/deploy.sh FULL_SHA`: deployment lock, exact commit checkout, local image build, backup of an existing deployment, migration, recreate, readiness/HTTPS checks, application fallback.
-- `ops/rollback.sh [FULL_SHA]`: select retained previous image; never reverse database migrations.
-- `ops/backup.sh`: custom-format dump with timestamp; calls BACKUP_UPLOAD_HOOK and retains seven daily local copies after a successful upload.
-- `ops/restore-test.sh backup.dump`: restore into a new disposable database, inspect schema, drop the disposable database.
-- systemd service/timer files: daily backup and retention cleanup.
+Create a separate HTTP-only Nginx server block matching existing IP-specific listeners for this domain, serving the ACME webroot. Validate `nginx -t`, reload, then issue a dedicated certificate using `certbot certonly --webroot -w /var/www/fomo-lens-acme -d fomo-lens.sholaayeni.xyz --email ayenisholah@yahoo.com --agree-tos`. Install `ops/nginx.conf.template` after substituting the verified server IP. Validate and reload. Run a certificate renewal dry run and check the renewal timer. Verify the existing hosted application's HTTPS health after every reload.
 
-Export DOMAIN and RELEASE as needed by Compose; use `RELEASE=$(cat .release)` for routine operations. The scripts are drafts. Before use, fix the outstanding deployment issues listed in HANDOFF.md, verify script syntax, and rehearse on an isolated server database.
+## Backups and deletion
 
-BACKUP_UPLOAD_HOOK must be an operator-owned executable taking a dump path and encrypting/uploading it to an off-server destination. If absent, backup exits nonzero after writing a local dump. Local backups alone do not meet production requirements.
+Install `age`. Generate `/etc/fomo-lens/backup-identity.txt` with `age-keygen`, root-only mode 0600. Retain a protected off-server copy of this identity in an owner-controlled password manager or encrypted storage; without it the backups cannot be decrypted. Never put the identity into Git or releases. `/etc/fomo-lens/backup.env` is root-only and contains shell-quoted BACKUP_DATABASE_URL and AGE_RECIPIENT (the public recipient from the identity).
 
-Backwards-compatible additive migrations only. A single app container may cause a brief interruption. Keep previous images until verification completes; do not reset or automatically restore production data.
+Backups are encrypted locally under `/var/backups/fomo-lens`, retained for seven days. They do not survive VPS or disk loss. No S3 service or off-server backup transfer is configured. Each backup has a unique UTC timestamp and random suffix, so multiple pre-migration backups on one day are retained independently. A complete backup directory contains `database.dump.age` and `deletions.jsonl.age`; incomplete pairs remain hidden and are never treated as recoverable backups.
 
-## Privacy maintenance
+Initialize a protected `/etc/fomo-lens/deletions.jsonl`. Set DELETION_LEDGER to that path for account deletion. The deletion command appends and syncs an intent before deleting; if interrupted, rerun the command. An intent means the email's restored account must be deleted even if the original transaction failed. Encrypt and back up the ledger alongside each dump. Replay the current ledger after restoring an old dump and before allowing traffic.
 
-`npm run maintenance` purges expired auth/session/rate data and 90-day events/operations, preserving minimal unresolved accounting. `npm run account:delete -- email --confirm` removes a user and owned records after checking active operations.
+Run `ops/backup.sh` before every migration, including the initial empty-database baseline. It atomically publishes encrypted dump/ledger pairs and removes completed pairs older than seven days only after a successful backup. Install the backup and maintenance timers plus failure alert unit. Rehearse restore on an isolated PostgreSQL instance with `RESTORE_ADMIN_URL` and `AGE_IDENTITY`; set RESTORE_EXPECT_SQL to assertions for known fixtures, and CURRENT_DELETION_LEDGER to the protected latest ledger. `restore-test.sh BACKUP_DIRECTORY` decrypts the pair, restores an isolated database, replays saved and current deletions, runs the assertions, and drops the test database. For a real recovery, keep traffic stopped, restore into a new dedicated database, run `replay-deletions.mjs SAVED_LEDGER CURRENT_LEDGER` through psql with ON_ERROR_STOP, verify records and readiness, then switch the connection. Never restore over the serving database. Expected fixtures must include an account that survives and one removed by ledger replay. Confirm an intentional backup failure sends an alert to the owner.
 
-Review the race between deletion and verification before enabling account deletion in production. Maintain a protected deletion ledger outside this source tree and reapply it after any backup restore. Document off-server backup retention and deletion handling before launch.
+## Release and rollback
 
-## Release acceptance
+Run the complete release gate, commit reviewed changes, fetch that exact commit into `repository`, and run `ops/deploy.sh FULL_SHA` as root. Builds run unprivileged without runtime credentials. Deployment takes a baseline backup, applies additive migrations, atomically switches `current`, and verifies readiness. Keep `previous`. Run `ops/rollback.sh` to revert code only; never reverse migrations or overwrite production data automatically.
 
-Run complete format/lint/type/unit/PostgreSQL/browser/build/secret checks, then test migrations from empty PostgreSQL, non-root container execution, DB outage readiness, isolated backup restore, failed-release rollback, real email, HTTPS, and off-server backups.
+Before public launch verify desktop/mobile flows, actual email sign-in, ownership, unlimited usage accounting, HTTPS, retained upstream acceptance limitations, backup restoration, rollback, process restart recovery and database-outage readiness. Scripts are implementation artifacts until those rehearsals pass.
 
-Current state: no deployment, no container rehearsal, no real email test, no credentialed Fomolens verification.
+## Verified artifact deployment and provider key rotation
+
+CI uses Node 24, isolated PostgreSQL databases and synthetic browser transports. It receives no production API keys. Successful `main` CI produces a release artifact, full commit SHA and SHA-256 checksum. Deploy verifies the originating workflow/repository/branch and checksum, then streams the artifact through the dedicated forced-command SSH account. Manual Deploy accepts a successful main CI run ID. Deployment serialization never cancels an active switch.
+
+The root-owned installer requires `/etc/fomo-lens/launch-ready`, created only after the initial operational rehearsals pass. It verifies the checksum, safely extracts the archive within the disk reserve, scans the built output against runtime secrets, backs up, applies existing migrations, atomically switches and checks local/public readiness. The service can write only its cache. Runtime secrets remain in `/etc/fomo-lens/app.env` outside artifacts. Use `ops/rollback.sh` for code-only rollback; never roll the database back over serving data.
+
+To rotate the provider key, replace only `FOMOLENS_KEY` in the protected server environment using an atomic file replacement that preserves root:fomo-lens ownership and mode 0640. Update repository Actions secret `FOMOLENS_KEY` from protected input, restart `fomo-lens`, and verify `/api/health/ready`. A rebuild is unnecessary. Preserve AUTH_SECRET, IP_HASH_SECRET, CURSOR_SECRET, the database and accounting history. Readiness verifies service configuration/database availability; it does not spend credits to validate provider entitlement.

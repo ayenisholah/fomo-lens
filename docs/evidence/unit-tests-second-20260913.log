@@ -1,0 +1,16 @@
+
+> fomo-lens@1.0.0 test
+> vitest run --exclude tests/integration.test.ts
+
+
+ RUN  v5.0.0 /home/xaxxo/shola/lens-atlas
+
+
+ Test Files  9 passed (9)
+      Tests  91 passed (91)
+   Start at  18:40:47
+   Duration  5.52s (import 51%, tests 27%, transform 17%, worker 4%)
+
+    Isolate  9 workers spawned · ~273ms startup each (spawn + environment, per file)
+             at least ~2.19s faster with isolate: false — reuses workers across files instead of one per file
+

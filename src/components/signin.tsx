@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 export function Signin() {
   const params = useSearchParams();
+  const pending = useRef(false);
   const [email, setEmail] = useState(""),
     [challenge, setChallenge] = useState(""),
     [code, setCode] = useState(""),
@@ -15,6 +16,8 @@ export function Signin() {
     return () => clearTimeout(t);
   }, [countdown]);
   async function request() {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
     setError("");
     try {
@@ -24,7 +27,7 @@ export function Signin() {
         body: JSON.stringify({ email }),
       });
       const json = await res.json();
-      if (!json.ok) {
+      if (!res.ok || !json.ok) {
         setCountdown(json.error.retryAfter ?? 0);
         throw new Error(json.error.message);
       }
@@ -36,10 +39,13 @@ export function Signin() {
         e instanceof Error ? e.message : "Email delivery is unavailable.",
       );
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
   async function verify() {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
     setError("");
     try {
@@ -53,11 +59,12 @@ export function Signin() {
         }),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error.message);
+      if (!res.ok || !json.ok) throw new Error(json.error.message);
       window.location.assign(json.data.returnTo);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not verify code.");
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
@@ -97,6 +104,7 @@ export function Signin() {
           <>
             <label htmlFor="email">Email address</label>
             <input
+              disabled={busy}
               id="email"
               name="email"
               type="email"
@@ -140,8 +148,8 @@ export function Signin() {
         {error}
       </p>
       <p className="fine">
-        Your sign-in lasts seven days. Codes expire after ten minutes. Fomo
-        Lens registration does not create a Fomolens account or credit allowance.
+        Your sign-in lasts seven days. Codes expire after ten minutes. Fomo Lens
+        registration does not create a Fomolens account or credit allowance.
       </p>
     </section>
   );

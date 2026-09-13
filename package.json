@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -19,8 +19,9 @@
     "maintenance": "tsx scripts/maintenance.ts",
     "account:delete": "tsx scripts/delete-account.ts",
     "scan:secrets": "node scripts/scan-secrets.mjs",
-    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:integration && npm run test:browser && npm run build && npm run scan:secrets",
-    "postinstall": "prisma generate"
+    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:integration && npm run test:browser && npm run build && npm run scan:secrets && npm run scan:build",
+    "postinstall": "prisma generate",
+    "scan:build": "node scripts/scan-secrets.mjs --build"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -54,5 +55,9 @@
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^5.0.0"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0",
+    "mysql2": "^3.22.0"
   }
 }

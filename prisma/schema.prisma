@@ -56,6 +56,9 @@ model ResearchOperation {
  status String
  reservedCredits Int @default(0) @map("reserved_credits")
  actualCredits Int? @map("actual_credits")
+ attempts Int @default(1)
+ retryAt DateTime? @map("retry_at") @db.Timestamptz
+ upstreamBalance Int? @map("upstream_balance")
  requestId String? @map("request_id")
  errorCode String? @map("error_code")
  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz

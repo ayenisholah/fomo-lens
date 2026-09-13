@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
-exec 9>.deploy.lock
-flock -n 9 || exit 1
-release="${1:-$(cat .previous-release)}"
-[[ "$release" =~ ^[0-9a-f]{40}$ ]] || exit 1
-docker image inspect "fomo-lens:$release" >/dev/null
-RELEASE="$release" docker compose up -d app
-printf '%s\n' "$release" > .release
-echo "Previous application image selected. Verify HTTPS/readiness. Database migrations were not reversed."
+root=${FOMO_ROOT:-/opt/fomo-lens}
+source "$root/ops/release-health.sh"
+exec 9>"$root/deploy.lock"
+flock -n 9
+previous=$(readlink -f "$root/previous")
+current=$(readlink -f "$root/current")
+[[ "$previous" == "$root/releases/"* && -d "$previous" ]]
+arm_release_recovery "$current"
+switch_release "$previous"
+systemctl restart "${FOMO_SERVICE:-fomo-lens}"
+ready
+public_ready
+ln -sfn "$current" "$root/previous"
+recovery_armed=0

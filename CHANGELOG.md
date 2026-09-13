@@ -1,6 +1,16 @@
 # Changelog
 
-## 2026-09-10 — Initial implementation checkpoint
+## 2026-09-13 — Completed constrained implementation checkpoint
+
+- Unified ordinary/recovered research application, page binding, stale-response suppression, lost-response identity retention and nonfatal metadata refresh.
+- Added injected acceptance orchestration with ledger validation, conservative ceiling enforcement and failure-retained locks; extracted synthetic-testable secret scanner helpers and archive enumeration.
+- Corrected Retry-After handling, retained-charge response status, signout error behavior and native switch interruption/restore reporting.
+- Expanded mocked unit coverage; see current [release verification](docs/release-verification.md). Browser/integration definitions remain unexecuted.
+- Wire decoder and stored adapter exist; native systemd/Nginx operations supersede Docker drafts. Release and authoritative billing gates remain blocked.
+
+## 2026-09-10 — Historical initial implementation checkpoint
+
+The following records the September 10 state only. Its pending decoder/Docker work and verification claims are superseded by the September 13 checkpoint above.
 
 ### Added
 

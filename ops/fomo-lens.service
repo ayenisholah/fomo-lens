@@ -1,0 +1,24 @@
+[Unit]
+Description=Fomo Lens
+After=network.target postgresql.service
+[Service]
+Type=simple
+User=fomo-lens
+Group=fomo-lens
+WorkingDirectory=/opt/fomo-lens/current
+EnvironmentFile=/etc/fomo-lens/app.env
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3001
+ExecStart=/usr/bin/node .next/standalone/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/fomo-lens/current/.next/standalone/.next/cache
+[Install]
+WantedBy=multi-user.target

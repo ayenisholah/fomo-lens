@@ -1,0 +1,1 @@
+ALTER TABLE research_operations ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1, ADD COLUMN retry_at TIMESTAMPTZ, ADD COLUMN upstream_balance INTEGER;

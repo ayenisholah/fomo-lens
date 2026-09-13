@@ -1,0 +1,23 @@
+# Replace SERVER_IP with the existing Nginx listener address. Install only after certificate issuance.
+server {
+    listen SERVER_IP:80;
+    server_name fomo-lens.sholaayeni.xyz;
+    location /.well-known/acme-challenge/ { root /var/www/fomo-lens-acme; }
+    location / { return 301 https://$host$request_uri; }
+}
+server {
+    listen SERVER_IP:443 ssl;
+    server_name fomo-lens.sholaayeni.xyz;
+    ssl_certificate /etc/letsencrypt/live/fomo-lens.sholaayeni.xyz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/fomo-lens.sholaayeni.xyz/privkey.pem;
+    client_max_body_size 8k;
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Atlas-Client-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_read_timeout 100s;
+        proxy_connect_timeout 5s;
+    }
+}

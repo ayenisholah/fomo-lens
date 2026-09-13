@@ -1,3 +1,5 @@
+> Current checkpoint (2026-09-13): implementation complete; release verification blocked. The permitted unit suite passes 91 tests across 9 files. See [../HANDOFF.md](../HANDOFF.md) for constraints and durable evidence. Operational and other verification commands below remain future reference only.
+
 # Fomolens integration resume notes
 
 Retrieved 2026-09-10 from authoritative public endpoints:
@@ -26,7 +28,7 @@ PnL has no window query; fetch once and change the display locally. The document
 
 Headers: `X-Credits-Cost`, `X-Credits-Remaining`, `X-Request-Id`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and sometimes `Retry-After`. Keep account balance owner-only. Never copy arbitrary upstream headers or error text.
 
-The idempotency key and identical URL recover a response without another credit charge for up to 24 hours. Retries still consume upstream request allowance. Different parameters with the same key return 409. After an abandoned request is released, a new key is required. **Current recovery code does not enforce the 24-hour boundary, does not reserve retry request allowance, and does not yet implement all Retry-After states. Fix before enabling dispatch.**
+The idempotency key and identical URL recover a response without another credit charge for up to 24 hours. Retries still consume upstream request allowance. Different parameters with the same key return 409. After an abandoned request is released, a new key is required. The implementation enforces a conservative recovery deadline and retry request accounting; production recovery rehearsal remains pending.
 
 List query parameter is **cursor**, containing the unchanged returned nextCursor. Preserve all original endpoint parameters, bound limit to ten, and stop on planLimitReached. Lists are not consistent snapshots. Upstream cursors expire after 24 hours; the application currently wraps them in a shorter signed envelope.
 
@@ -44,10 +46,8 @@ Most profile/PnL/page fields are optional in the specification. Do not coerce ab
 
 Errors are `{"error":"error_code"}`: 400 validation, 401 auth, 402 credit reservation, 403 plan/review/collection, 404 unobserved, 409 idempotency/in-progress, 429 rate/concurrency, 503 unavailable. Determine actual error codes for cursor expiry and abandoned/replayed operations using documentation/fixtures.
 
-## Current code boundary
+## Current implementation and acceptance
 
-`src/lib/research-contract.ts` describes **internal synthetic application DTOs**, not these wire responses. `src/lib/upstream.ts` deliberately exports `verifiedContract = null`. Do not merely replace null with guessed paths: implement Zod wire schemas, explicit normalization that preserves metadata and nullable identities, error/replay semantics, tests, and the documented limits first.
+Rechecked official docs.md and openapi.json on September 13, 2026. `src/lib/wire.ts` implements schema validation and normalization, and `src/lib/upstream.ts` supplies the stored adapter. Internal DTOs preserve nullable identities, values and independent observation times. Recovery persists the original URL/key, reserves retry request allowance, retains uncertain credits, and rejects attempts inside the final 65 seconds of the documented 24-hour window.
 
-Existing proposed costs align with the supplied guide, but the wallet maximum wording should be checked against representative multiple-mapping results. Do not send paid verification requests until credentials and explicit request approval are supplied.
-
-No live reads, public-lookup proxy, scans, WebSockets, background collection, or automatic retry.
+Credentialed acceptance recorded successful leaderboard, profile, PnL and forward-wallet responses (14 known credits). A reverse-wallet request returned HTTP 402 without recorded billing metadata. Its conservative 100-credit reservation remains unresolved; no further paid verification is permitted until reconciled. Following, followers and successful reverse-wallet acceptance are still pending. See docs/release-verification.md. Do not infer production verification from unit fixtures.

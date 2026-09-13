@@ -9,10 +9,10 @@ export default function Privacy() {
         <span className="eyebrow">PRIVACY</span>
         <h1>Your research stays yours.</h1>
         <p>
-          Fomo Lens stores your verified email, signup and login times, access
-          approval, private research parameters, and minimal activity events.
-          Your research history is accessible only through your session. Owners
-          can see user accounts and aggregate application adoption.
+          Fomo Lens stores your verified email, signup and login times, private
+          research parameters, and minimal activity events. Your research
+          history is accessible only through your session. Owners can see user
+          accounts and aggregate application adoption.
         </p>
         <h2>Authentication</h2>
         <p>
@@ -25,10 +25,10 @@ export default function Privacy() {
         <h2>Research and service providers</h2>
         <p>
           Stored research parameters are sent to Fomolens only after an explicit
-          approved action. We do not persist raw upstream research responses.
-          Example mode makes no upstream research requests. Shared links contain
-          only the selected handles and display window; anyone with a link can
-          see those selections.
+          action. We do not persist raw upstream research responses. Example
+          mode makes no upstream research requests. Shared links contain only
+          the selected handles and display window; anyone with a link can see
+          those selections.
         </p>
         <h2>Retention and deletion</h2>
         <p>
@@ -40,11 +40,11 @@ export default function Privacy() {
           command.
         </p>
         <p>
-          Local backup copies expire after seven daily backups. The operator
-          must configure an off-server encrypted backup retention policy before
-          production launch and provide a contact address. Deleted data may
-          persist in retained backups until they expire; deletion records must
-          be reapplied before any restored database serves users.
+          Encrypted backups are retained locally for seven days. Local backups
+          do not survive server or disk loss. Contact{" "}
+          <a href="mailto:ayenisholah@yahoo.com">ayenisholah@yahoo.com</a> for
+          support or deletion. Deletion records are reapplied before restored
+          data serves users.
         </p>
         <h2>No advertising analytics</h2>
         <p>

@@ -1,8 +1,10 @@
 [Unit]
-Description=Fomo Lens retention cleanup
+Description=Fomo Lens retention maintenance
+OnFailure=fomo-lens-alert@%n.service
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/fomo-lens
-EnvironmentFile=/opt/fomo-lens/ops.env
-ExecStart=/bin/sh -c 'RELEASE=$(cat .release) docker compose --profile ops run --rm ops npx tsx scripts/maintenance.ts'
-User=fomo-lens-deploy
+User=fomo-lens
+WorkingDirectory=/opt/fomo-lens/current
+EnvironmentFile=/etc/fomo-lens/app.env
+ExecStart=/usr/bin/npm run maintenance
+UMask=0077

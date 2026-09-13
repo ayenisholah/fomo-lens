@@ -8,6 +8,8 @@ export const subjectSchema = z
   .transform((s) => s.replace(/^@/, "").toLowerCase());
 const timestamp = z.string().datetime({ offset: true }).nullable();
 export const profileSchema = z.object({
+  id: z.string().nullable().optional(),
+  handle: z.string().nullable().optional(),
   subject: z.string(),
   name: z.string(),
   bio: z.string().optional(),
@@ -20,6 +22,7 @@ export const walletsSchema = z.object({
   count: z.number().int().nonnegative(),
   mappings: z.array(
     z.object({
+      userId: z.string().nullable().optional(),
       chain: z.string(),
       address: z.string(),
       subject: z.string().nullable(),
@@ -40,6 +43,9 @@ export const pnlSchema = z.object({
   }),
 });
 const page = z.object({
+  count: z.number().nullable().optional(),
+  hasMore: z.boolean().nullable().optional(),
+  consistentSnapshot: z.boolean().nullable().optional(),
   nextCursor: z.string().nullable(),
   planLimitReached: z.boolean(),
   observedAt: timestamp,
@@ -53,11 +59,22 @@ export const socialSchema = page.extend({
 export const leaderboardSchema = page.extend({
   window: windowSchema,
   items: z
-    .array(z.object({ profile: profileSchema, pnl: z.number().nullable() }))
+    .array(
+      z.object({
+        profile: profileSchema,
+        pnl: z.number().nullable(),
+        fetchedAt: timestamp.optional(),
+        rank: z.number().nullable().optional(),
+        position: z.number().nullable().optional(),
+      }),
+    )
     .max(10),
 });
 export const coverageSchema = z.object({
-  identities: z.number().int(),
+  available: z.boolean().optional(),
+  identities: z.number().int().nullable(),
+  solanaMappings: z.number().nullable().optional(),
+  evmMappings: z.number().nullable().optional(),
   observedAt: timestamp,
   description: z.string(),
 });

@@ -9,9 +9,22 @@ export function origin(req: Request) {
 export async function body(req: Request) {
   if (Number(req.headers.get("content-length") ?? 0) > 8192)
     throw new AppError("validation", "Request is too large.", 413);
-  const text = await req.text();
-  if (text.length > 8192)
-    throw new AppError("validation", "Request is too large.", 413);
+  const reader = req.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 8192) {
+        await reader.cancel();
+        throw new AppError("validation", "Request is too large.", 413);
+      }
+      chunks.push(value);
+    }
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
   try {
     return JSON.parse(text);
   } catch {

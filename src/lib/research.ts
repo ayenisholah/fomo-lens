@@ -1,40 +1,32 @@
 import "server-only";
+import {
+  operationSummary,
+  recoveryDeadline,
+  cursorBinding,
+  retainedActual,
+} from "./research-policy";
+export { canonical } from "./research-policy";
 import { db } from "@/db";
 import type { User, Prisma } from "@/generated/prisma/client";
 import { config } from "./config";
-import { lock } from "./auth";
+import { lock, isOwner } from "./auth";
 import { AppError } from "./errors";
 import { type ResearchRequest, schemas } from "./research-contract";
 import { exampleData } from "./examples";
 import { readCursor, signCursor } from "./cursors";
 import { verifiedContract, upstream, type VerifiedContract } from "./upstream";
-export const effectiveMode = (user: Pick<User, "storedApproved">) =>
-  config().FOMOLENS_MODE === "stored" && user.storedApproved
-    ? "stored"
-    : "example";
-export function canonical(r: ResearchRequest) {
-  return {
-    kind: r.kind,
-    ...(r.subject ? { subject: r.subject } : {}),
-    ...(r.address ? { address: r.address } : {}),
-    ...(r.kind === "leaderboard" ? { window: r.window } : {}),
-    limit: 10,
-  };
-}
-function cursorBinding(userId: string, r: ResearchRequest, mode: string) {
-  return JSON.stringify({ userId, mode, ...canonical(r) });
-}
-export async function allowance(userId: string) {
-  const day = new Date().toISOString().slice(0, 10),
-    c = config();
+export const effectiveMode = () =>
+  config().FOMOLENS_MODE === "stored" ? "stored" : "example";
+export async function allowance() {
+  const day = new Date().toISOString().slice(0, 10);
   const b = await db().budgetBucket.findUnique({
-    where: { key: "user:" + userId + ":" + day },
+    where: { key: "service:" + day },
   });
   return {
     requestsUsed: b?.requests ?? 0,
     creditsReservedOrUsed: b?.credits ?? 0,
-    requestLimit: c.USER_DAILY_REQUESTS,
-    creditLimit: c.USER_DAILY_CREDITS,
+    requestLimit: null,
+    creditLimit: null,
     day,
   };
 }
@@ -47,6 +39,25 @@ export async function reserve(
   const c = config(),
     day = now.toISOString().slice(0, 10);
   await lock(tx, "service-budget");
+  const blocked = await tx.researchOperation.findFirst({
+    where: { mode: "stored", retryAt: { gt: now } },
+    orderBy: { retryAt: "desc" },
+  });
+  if (blocked?.retryAt)
+    throw new AppError(
+      "rate_limit",
+      "Research is temporarily busy. Try again later.",
+      429,
+      Math.ceil((blocked.retryAt.getTime() - now.getTime()) / 1000),
+    );
+  await tx.researchOperation.updateMany({
+    where: {
+      mode: "stored",
+      status: "running",
+      updatedAt: { lt: new Date(now.getTime() - 90000) },
+    },
+    data: { status: "uncertain", errorCode: "worker_interrupted" },
+  });
   const active = await tx.researchOperation.count({
     where: { mode: "stored", status: "running" },
   });
@@ -59,27 +70,12 @@ export async function reserve(
       "A stored request is already in progress. Wait for it to finish.",
       409,
     );
-  for (const [scope, requests, credits] of [
-    ["service", c.SERVICE_DAILY_REQUESTS, c.SERVICE_DAILY_CREDITS],
-    ["user:" + userId, c.USER_DAILY_REQUESTS, c.USER_DAILY_CREDITS],
-  ] as const) {
-    const key = scope + ":" + day;
-    const b = await tx.budgetBucket.upsert({
-      where: { key },
-      create: { key, day },
-      update: {},
-    });
-    if (b.requests + 1 > requests || b.credits + max > credits)
-      throw new AppError(
-        "budget",
-        "This action exceeds the remaining daily application allowance.",
-        429,
-      );
-    await tx.budgetBucket.update({
-      where: { key },
-      data: { requests: { increment: 1 }, credits: { increment: max } },
-    });
-  }
+  const key = "service:" + day;
+  await tx.budgetBucket.upsert({
+    where: { key },
+    create: { key, day, requests: 1, credits: max },
+    update: { requests: { increment: 1 }, credits: { increment: max } },
+  });
 }
 export async function submit(
   user: User,
@@ -87,7 +83,7 @@ export async function submit(
   contract: VerifiedContract | null = verifiedContract,
   transport: typeof fetch = fetch,
 ) {
-  const mode = effectiveMode(user),
+  const mode = effectiveMode(),
     binding = cursorBinding(user.id, r, mode);
   const rawCursor = r.cursor ? readCursor(r.cursor, binding) : undefined;
   if (mode === "stored" && !contract)
@@ -126,12 +122,10 @@ export async function submit(
         409,
       );
     if (mode === "stored") {
-      // Recheck approval while serializing with owner approval/revocation.
+      // Serialize account deletion with new research.
       await lock(tx, "approval:" + user.id);
-      if (
-        !(await tx.user.findUnique({ where: { id: user.id } }))?.storedApproved
-      )
-        throw new AppError("approval", "Stored access has been revoked.", 403);
+      if (!(await tx.user.findUnique({ where: { id: user.id } })))
+        throw new AppError("unauthenticated", "Sign in to continue.", 401);
       await reserve(tx, user.id, maximum);
     }
     await tx.researchOperation.create({
@@ -162,7 +156,9 @@ async function execute(
   let data: unknown,
     actual: number | null = mode === "example" ? 0 : null,
     requestId: string | null = null,
-    error: string | undefined;
+    error: string | undefined,
+    retryAfter: number | undefined,
+    balance: number | null = null;
   try {
     if (mode === "example")
       data = exampleData(r, rawCursor ? Number(rawCursor) : 0);
@@ -177,13 +173,17 @@ async function execute(
       );
       actual = result.metadata.credits;
       requestId = result.metadata.requestId;
+      retryAfter = result.metadata.retryAfter;
+      balance = result.metadata.balance;
       if (!result.ok) {
         error = result.error;
         throw new AppError(
           result.error,
           result.error === "cursor_expired"
             ? "The cursor expired. Start a new search explicitly."
-            : "Stored research could not be completed.",
+            : result.error === "credits" || result.error === "rate_limit"
+              ? "Research is temporarily unavailable due to provider limits. Try again later."
+              : "Stored research could not be completed.",
           result.metadata.status >= 400 ? result.metadata.status : 502,
           result.metadata.retryAfter,
         );
@@ -201,16 +201,27 @@ async function execute(
           ? signCursor(page.nextCursor, cursorBinding(userId, r, mode))
           : null;
     }
-    await finish(userId, r.id, actual, requestId, undefined, mode);
+    const settled = await finish(
+      userId,
+      r.id,
+      actual,
+      requestId,
+      undefined,
+      mode,
+      retryAfter,
+      balance,
+    );
     return {
       mode,
       data,
-      operation: {
-        id: r.id,
-        status: actual === null ? "uncertain" : "complete",
-        actualCredits: actual,
-        requestId,
-      },
+      operation: operationSummary(
+        r.id,
+        settled.actualCredits,
+        settled.requestId,
+        isOwner(
+          (await db().user.findUniqueOrThrow({ where: { id: userId } })).email,
+        ),
+      ),
     };
   } catch (e) {
     await finish(
@@ -220,6 +231,8 @@ async function execute(
       requestId,
       error ?? (e instanceof AppError ? e.code : "upstream_schema"),
       mode,
+      retryAfter,
+      balance,
     );
     throw e;
   }
@@ -231,29 +244,38 @@ async function finish(
   requestId: string | null,
   error: string | undefined,
   mode: string,
+  retryAfter?: number,
+  balance: number | null = null,
 ) {
-  await db().$transaction(async (tx) => {
+  return db().$transaction(async (tx) => {
     await lock(tx, "service-budget");
     const op = await tx.researchOperation.findFirstOrThrow({
       where: { id, userId },
     });
+    actual = retainedActual(op.actualCredits, actual);
+    requestId = requestId ?? op.requestId;
     if (actual !== null && mode === "stored") {
       const day = op.createdAt.toISOString().slice(0, 10);
       // Release a known unused reservation; unknown costs retain the maximum.
       const delta = actual - (op.actualCredits ?? op.reservedCredits);
-      for (const scope of ["service", "user:" + userId])
+      for (const scope of ["service"])
         await tx.budgetBucket.update({
           where: { key: scope + ":" + day },
           data: { credits: { increment: delta } },
         });
     }
-    await tx.researchOperation.update({
+    const settled = await tx.researchOperation.update({
       where: { id },
       data: {
         status: actual === null ? "uncertain" : error ? "failed" : "complete",
         actualCredits: actual,
         requestId,
         errorCode: error ?? null,
+        retryAt:
+          retryAfter && Number.isFinite(retryAfter)
+            ? new Date(Date.now() + retryAfter * 1000)
+            : null,
+        ...(balance !== null ? { upstreamBalance: balance } : {}),
         updatedAt: new Date(),
       },
     });
@@ -264,6 +286,7 @@ async function finish(
         mode,
       },
     });
+    return settled;
   });
 }
 export async function operation(userId: string, id: string) {
@@ -275,10 +298,20 @@ export async function operation(userId: string, id: string) {
     kind: op.kind,
     params: op.params,
     status: op.status,
-    actualCredits: op.actualCredits,
-    reservedCredits: op.reservedCredits,
+
     errorCode: op.errorCode,
     createdAt: op.createdAt,
+    retryAt: op.retryAt,
+    recoveryExpiresAt: recoveryDeadline(op.createdAt),
+    recoveryState:
+      Date.now() >= recoveryDeadline(op.createdAt).getTime()
+        ? "expired"
+        : op.errorCode === "idempotency_abandoned" ||
+            (op.status === "failed" && op.actualCredits === 0)
+          ? "new_request"
+          : op.retryAt && op.retryAt > new Date()
+            ? "wait"
+            : "recover",
   };
 }
 export async function recover(
@@ -298,18 +331,33 @@ export async function recover(
     await lock(tx, "approval:" + user.id);
     await lock(tx, "service-budget");
     const current = await tx.user.findUnique({ where: { id: user.id } });
-    if (!current?.storedApproved || config().FOMOLENS_MODE !== "stored")
-      throw new AppError(
-        "approval",
-        "Approved stored access is required.",
-        403,
-      );
+    if (!current || config().FOMOLENS_MODE !== "stored")
+      throw new AppError("approval", "Sign in to use research.", 403);
     const op = await tx.researchOperation.findFirst({
       where: { id, userId: user.id, mode: "stored" },
     });
     if (!op) throw new AppError("not_found", "Operation not found.", 404);
-    if (op.status === "running")
+    if (Date.now() >= recoveryDeadline(op.createdAt).getTime())
+      throw new AppError(
+        "recovery_expired",
+        "Recovery has expired. Start a new request explicitly.",
+        409,
+      );
+    if (op.status === "failed" && op.actualCredits === 0)
+      throw new AppError(
+        "new_request",
+        "The request was not charged. Start a new request explicitly.",
+        409,
+      );
+    if (op.errorCode === "idempotency_abandoned")
+      throw new AppError("abandoned", "Start a new request explicitly.", 409);
+    if (op.status === "running" && Date.now() - op.updatedAt.getTime() < 90000)
       throw new AppError("in_progress", "Operation is still in progress.", 409);
+    await tx.researchOperation.update({
+      where: { id },
+      data: { status: "uncertain" },
+    });
+    await reserve(tx, user.id, 0);
     const c = config();
     if (
       (await tx.researchOperation.count({
@@ -326,7 +374,11 @@ export async function recover(
       );
     await tx.researchOperation.update({
       where: { id },
-      data: { status: "running", updatedAt: new Date() },
+      data: {
+        status: "running",
+        updatedAt: new Date(),
+        attempts: { increment: 1 },
+      },
     });
     return op;
   });

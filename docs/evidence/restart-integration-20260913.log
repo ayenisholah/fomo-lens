@@ -1,0 +1,13 @@
+
+> fomo-lens@1.0.0 test:integration
+> vitest run tests/integration.test.ts
+
+
+ RUN  v5.0.0 /home/xaxxo/shola/lens-atlas
+
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  20:29:35
+   Duration  18.79s (tests 83%, import 11%, transform 5%)
+

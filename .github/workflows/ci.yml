@@ -1,0 +1,55 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: fomo_lens_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      TEST_DATABASE_URL: postgresql://test:test@127.0.0.1:5432/fomo_lens_test
+      TEST_BROWSER_DATABASE_URL: postgresql://test:test@127.0.0.1:5432/fomo_lens_test_browser
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
+      - uses: actions/setup-node@94196ee1d15439c1b6651cd87ef14e88ec435966
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check && npm run lint && npm run typecheck && npm test && npm run scan:secrets
+      - name: Prepare isolated databases
+        run: |
+          PGPASSWORD=test createdb -h 127.0.0.1 -U test fomo_lens_test_browser
+          DATABASE_URL="$TEST_DATABASE_URL" npm run db:migrate
+          DATABASE_URL="$TEST_BROWSER_DATABASE_URL" npm run db:migrate
+      - run: npm run test:integration
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npm run build && npm run scan:build
+      - name: Package tested release
+        run: bash scripts/package-release.sh "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-${{ github.sha }}
+          path: |
+            /tmp/fomo-artifact/release.tar.gz
+            /tmp/fomo-artifact/release.sha256
+            /tmp/fomo-artifact/REVISION
+          retention-days: 7
+          if-no-files-found: error

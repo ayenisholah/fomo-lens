@@ -1,0 +1,6 @@
+[Unit]
+Description=Fomo Lens operations failure alert
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/fomo-lens/app.env
+ExecStart=/usr/bin/node /opt/fomo-lens/ops/alert.mjs %i

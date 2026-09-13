@@ -1,36 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
-exec 9>.deploy.lock
-flock -n 9 || { echo "Deployment already in progress" >&2; exit 1; }
-release="${1:?Usage: bash ops/deploy.sh FULL_COMMIT_SHA}"
-[[ "$release" =~ ^[0-9a-f]{40}$ ]] || { echo "Use an exact 40-character commit" >&2; exit 1; }
-[ -z "$(git status --porcelain)" ] || { echo "Checkout must be clean" >&2; exit 1; }
-git fetch origin
-git cat-file -e "$release^{commit}"
-previous=$(cat .release 2>/dev/null || true)
-git checkout --detach "$release"
-export RELEASE="$release"
-docker build --target runner -t "fomo-lens:$release" .
-docker build --target operations -t "fomo-lens-ops:$release" .
-docker compose up -d db
-if [ -n "$previous" ]; then
- docker image inspect "fomo-lens:$previous" --format '{{.Id}}' > .previous-image
- bash ops/backup.sh
+umask 077
+# Root runs this after native prerequisites, app.env, backup.env and the service are installed.
+sha=${1:?Usage: deploy.sh FULL_SHA}
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+root=${FOMO_ROOT:-/opt/fomo-lens}
+source "$root/ops/release-health.sh"
+exec 9>"$root/deploy.lock"
+flock -n 9
+free_kb=$(df --output=avail "$root" | tail -1)
+(( free_kb >= 2621440 )) || { echo 'Insufficient disk for build and 1.5 GB reserve'; exit 1; }
+[[ $(node -p 'process.versions.node.split(".")[0]') == 24 ]]
+release="$root/releases/$sha"
+[[ ! -e "$release" ]]
+mkdir -p "$release"
+git -C "$root/repository" archive "$sha" | tar -x -C "$release"
+chown -R "${FOMO_USER:-fomo-lens}:${FOMO_GROUP:-fomo-lens}" "$release"
+# Builds never receive runtime credentials.
+runuser -u "${FOMO_USER:-fomo-lens}" -- sh -c 'cd "$1" && env -i PATH="$PATH" HOME="$HOME" npm ci && env -i PATH="$PATH" HOME="$HOME" npm run build && npm run scan:secrets -- --archive && npm run scan:build' sh "$release"
+# Only scanner processes receive the protected configuration path. Builds above
+# have neither runtime credentials nor access to the root-owned configuration.
+(cd "$release" && env -i PATH="$PATH" SECRET_SCAN_ENV_FILE="${FOMO_APP_ENV:-/etc/fomo-lens/app.env}" node scripts/scan-secrets.mjs --archive && env -i PATH="$PATH" SECRET_SCAN_ENV_FILE="${FOMO_APP_ENV:-/etc/fomo-lens/app.env}" node scripts/scan-secrets.mjs --build)
+mkdir -p "$release/.next/standalone/.next/cache"
+cp -a "$release/.next/static" "$release/.next/standalone/.next/"
+cp -a "$release/public" "$release/.next/standalone/"
+chown -R "${FOMO_USER:-fomo-lens}:${FOMO_GROUP:-fomo-lens}" "$release/.next/standalone/.next/cache"
+free_kb=$(df --output=avail "$root" | tail -1)
+(( free_kb >= 1572864 )) || { echo 'Deployment would violate disk reserve'; exit 1; }
+"$root/ops/backup.sh"
+# app.env uses shell-compatible quoted values and is readable only by root/service group.
+set -a
+source "${FOMO_APP_ENV:-/etc/fomo-lens/app.env}"
+set +a
+(cd "$release" && npm run db:migrate)
+old=$(readlink -f "$root/current" || true)
+if [[ -z "$old" || ! -d "$old" ]]; then
+  ! ss -H -ltn "sport = :${FOMO_PORT:-3001}" | grep -q . || { echo "Port ${FOMO_PORT:-3001} occupied"; exit 1; }
 fi
-docker compose --profile ops run --rm ops
-docker compose up -d app caddy
-healthy=false
-for attempt in $(seq 1 18); do
- if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then healthy=true; break; fi
- sleep 5
-done
-if [ "$healthy" = true ] && curl --fail --silent --show-error "https://${DOMAIN:?Export DOMAIN}/api/health/ready"; then
- printf '%s\n' "$previous" > .previous-release
- printf '%s\n' "$release" > .release
- echo "Release is ready: $release"
-else
- echo "Health check failed. Additive migrations remain applied." >&2
- if [ -n "$previous" ]; then RELEASE="$previous" docker compose up -d app; fi
- exit 1
-fi
+# Arm before the first mutation so signal/error exits restore the prior code release.
+arm_release_recovery "$old"
+switch_release "$release"
+systemctl restart "${FOMO_SERVICE:-fomo-lens}"
+ready
+public_ready
+if [[ -n "$old" && -d "$old" ]]; then ln -sfn "$old" "$root/previous"; fi
+recovery_armed=0
+printf 'Verified release %s\n' "$sha"

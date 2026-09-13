@@ -10,7 +10,8 @@ export const digest = (value: string) =>
 export const keyed = (secret: string, value: string) =>
   createHmac("sha256", secret).update(value).digest("hex");
 export const equal = (a: string, b: string) =>
-  a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  Buffer.byteLength(a) === Buffer.byteLength(b) &&
+  timingSafeEqual(Buffer.from(a), Buffer.from(b));
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export function safeReturn(value: unknown) {
   if (

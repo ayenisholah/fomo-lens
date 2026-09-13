@@ -1,0 +1,62 @@
+name: Deploy
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful CI run ID for a main revision
+        required: true
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: Verify CI provenance
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > run.json
+          jq -e --arg repo "$GH_REPO" '.conclusion == "success" and .head_branch == "main" and .head_repository.full_name == $repo and .path == ".github/workflows/ci.yml" and (.event == "push" or .event == "workflow_dispatch")' run.json
+          sha=$(jq -r .head_sha run.json)
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "run=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          name: release-${{ steps.revision.outputs.sha }}
+          run-id: ${{ steps.revision.outputs.run }}
+          github-token: ${{ github.token }}
+          path: artifact
+      - name: Transfer verified release
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SHA: ${{ steps.revision.outputs.sha }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/fomo
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cd artifact
+          test "$(cat REVISION)" = "$SHA"
+          sha256sum -c release.sha256
+          checksum=$(cut -d ' ' -f1 release.sha256)
+          ssh -i ~/.ssh/fomo -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes fomo-deploy@45.67.128.88 "deploy $SHA $checksum" < release.tar.gz
+          rm ~/.ssh/fomo

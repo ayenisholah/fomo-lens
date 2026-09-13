@@ -1,37 +1,11 @@
-# Fomo Lens status
+> Approved free-access plan (2026-09-13): no application request/credit caps. Current-key public launch is authorized after engineering checks. Historical billing restrictions below are superseded; preserve the private ledger and acceptance ceiling, and do not run paid acceptance automatically.
 
-Updated 2026-09-10.
+# Fomo Lens status — 2026-09-13
 
-Fomo Lens is an independent research application. This repository is an implementation checkpoint, not a completed or deployed release.
+Implementation is complete for the constrained checkpoint; release verification remains blocked. The preserved Next.js/React application includes public synthetic research, verified-user access, owner administration, graph/list exploration, wallet lookup, PnL windows, comparison, leaderboard pagination, shared selections and private history.
 
-## Written
+`src/lib/wire.ts` implements the decoder and `src/lib/upstream.ts` supplies a populated stored-dispatch adapter. Native Node/systemd/PostgreSQL/Nginx operations replace the older Docker/Caddy drafts. Credentialed acceptance is incomplete: prior successful requests account for 14 credits and an unresolved reverse-wallet request retains 100 credits of exposure, against the original 120 ceiling.
 
-- Next.js App Router application with strict TypeScript, React, Tailwind, locally hosted Manrope, and the requested dark palette.
-- Landing, methodology, privacy, email verification, synthetic workspace, and owner screens.
-- React Flow graph, accessible connection list, explicit research controls, wallet lookup controls, four sampled PnL windows, comparison, and history UI.
-- Prisma/PostgreSQL schema and initial SQL migration.
-- Verification-code delivery, keyed hashes, atomic challenges, fixed seven-day sessions, request limits, session ownership, and owner checks.
-- Durable research operation and budget code, signed cursors, and injectable transport boundary.
-- Docker/Caddy, maintenance, backup, isolated restore, deployment, and rollback drafts.
+This continuation unified ordinary/recovered result handling, preserved operation identity after lost responses, isolated metadata refresh failures, hardened acceptance-ledger persistence and validation, extracted scanner helpers and corrected native interruption/failure handling. Public routes, research payloads, design, email templates, immediate verified-user access, unlimited daily access with UTC usage accounting and concurrency one remain intact. No schema changes were made.
 
-Written code is not equivalent to verified behavior. See [HANDOFF.md](HANDOFF.md).
-
-## Synthetic examples
-
-Example identities and values are generated deterministically. No real trader results, fabricated time series, investment scores, or freshness claims are provided. Public shared examples are labeled synthetic.
-
-## Upstream capabilities
-
-The user supplied Fomolens documentation. Public documentation and OpenAPI were retrieved successfully. Stored routes, costs, billing headers, pagination parameters, and the replay duration are now documented in [contract notes](docs/fomolens-contract-notes.md).
-
-The actual wire-to-application decoder remains unwritten. `verifiedContract` is intentionally `null`. No API key was received and no credentialed request was made. Stored mode is not verified.
-
-## Verification and deployment
-
-See the current checkpoint results in [HANDOFF.md](HANDOFF.md). Prisma generation, strict typechecking, lint (two warnings), a production build without secrets, source pattern scanning, and shell syntax checks passed. Full unit/integration/browser suites and release verification remain outstanding.
-
-Docker is not installed locally and must not be installed locally at the user's request. An existing PostgreSQL 14.8 installation was detected but not started. A VPS will be supplied later. No production deployment, HTTPS, real email, off-server backup, or rollback rehearsal has occurred.
-
-## Next
-
-Complete adapter and security/accounting review, implement acceptance tests, finish local verification, then deploy and rehearse Docker operations on the provided server. No scope expansion is needed.
+See [HANDOFF.md](HANDOFF.md), the [capability inventory](docs/capability-inventory.md) and [release checklist](docs/release-verification.md) for test results and exact pending gates. Unit tests establish mocked behavior only. No deployment, operational rehearsal or new paid acceptance occurred.

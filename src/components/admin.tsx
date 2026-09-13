@@ -15,18 +15,12 @@ type Data = {
   active30: number;
   counts: { mode: string; status: string; _count: number }[];
   budgets: { day: string; credits: number; requests: number }[];
-  upstreamBalance: null;
+  upstreamBalance: number | null;
   userLimit: number;
 };
 export function Admin() {
   const [data, setData] = useState<Data | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  async function load() {
-    const j = await fetch("/api/admin").then((r) => r.json());
-    if (!j.ok) throw new Error(j.error.message);
-    setData(j.data);
-  }
+    [error, setError] = useState("");
   useEffect(() => {
     let mounted = true;
     fetch("/api/admin")
@@ -66,15 +60,15 @@ export function Admin() {
                 <p>Active users · 30 days</p>
               </article>
               <article>
-                <h2>Unavailable</h2>
-                <p>Upstream balance — contract not verified</p>
+                <h2>{data.upstreamBalance ?? "Unavailable"}</h2>
+                <p>Latest observed upstream balance</p>
               </article>
             </div>
             <section className="card table-scroll">
               <h2>Verified users</h2>
               <p>
-                Up to {data.userLimit} most recent accounts. Stored approval
-                does not bypass the integration verification gate.
+                Up to {data.userLimit} most recent accounts. All verified
+                accounts have immediate research access.
               </p>
               <table>
                 <thead>
@@ -93,37 +87,7 @@ export function Admin() {
                       <td>{u.createdAt}</td>
                       <td>{u.lastLoginAt}</td>
                       <td>{u.lastActivity ?? "Unavailable"}</td>
-                      <td>
-                        <button
-                          disabled={busy}
-                          onClick={async () => {
-                            setBusy(true);
-                            setError("");
-                            try {
-                              const j = await fetch("/api/admin/access", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  userId: u.id,
-                                  approved: !u.storedApproved,
-                                }),
-                              }).then((r) => r.json());
-                              if (!j.ok) throw new Error(j.error.message);
-                              await load();
-                            } catch (e) {
-                              setError(
-                                e instanceof Error
-                                  ? e.message
-                                  : "Update failed.",
-                              );
-                            } finally {
-                              setBusy(false);
-                            }
-                          }}
-                        >
-                          {u.storedApproved ? "Revoke" : "Approve"}
-                        </button>
-                      </td>
+                      <td>Verified</td>
                     </tr>
                   ))}
                 </tbody>
@@ -136,7 +100,7 @@ export function Admin() {
                   {c.mode} · {c.status}: {c._count}
                 </p>
               ))}
-              <h2>Service budget usage</h2>
+              <h2>Service usage</h2>
               {data.budgets.length ? (
                 data.budgets.map((b) => (
                   <p key={b.day}>
@@ -145,7 +109,7 @@ export function Admin() {
                   </p>
                 ))
               ) : (
-                <p>No stored budget usage.</p>
+                <p>No stored usage.</p>
               )}
             </section>
           </>

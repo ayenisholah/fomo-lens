@@ -1,7 +1,14 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import {
+  applyResearchResult,
+  refreshResearchMetadata,
+  type ClientOperation,
+} from "@/lib/research-client";
+import { withResearchRequest } from "@/lib/request-lifecycle";
+import { recoverRequest } from "@/lib/recovery-client";
 import { Brand } from "./brand";
 import { Graph } from "./graph";
 import { exampleData, exampleProfile, examplePnl } from "@/lib/examples";
@@ -13,14 +20,20 @@ import {
   type Leaderboard,
   type ResearchRequest,
   type Kind,
+  schemas,
   windows,
   requestSchema,
+  subjectSchema,
 } from "@/lib/research-contract";
 type Account = { email: string; owner: boolean; mode: "example" | "stored" };
 type History = {
   id: string;
   kind: string;
-  params: { subject?: string; address?: string };
+  params: {
+    subject?: string;
+    address?: string;
+    window?: (typeof windows)[number];
+  };
   mode: string;
   status: string;
   createdAt: string;
@@ -28,10 +41,10 @@ type History = {
 type Allowance = {
   requestsUsed: number;
   creditsReservedOrUsed: number;
-  requestLimit: number;
-  creditLimit: number;
+  requestLimit: null;
+  creditLimit: null;
 };
-type Op = { id: string; status: string; actualCredits: number | null };
+type Op = ClientOperation;
 const exact = (n: number | null | undefined) =>
   n == null
     ? "Unavailable"
@@ -52,9 +65,15 @@ export function Workspace({
   publicExample?: boolean;
 }) {
   const query = useSearchParams();
-  const seed = (query.get("subject") ?? "example_trader")
-    .replace(/^@/, "")
-    .slice(0, 64);
+  const [hydrated, setHydrated] = useState(false);
+  const router = useRouter();
+  const selectionVersion = useRef(0);
+  const pending = useRef(false);
+  const lastRequest = useRef<ResearchRequest | null>(null);
+  const lastRequestVersion = useRef(0);
+  const seed =
+    subjectSchema.safeParse(query.get("subject") ?? "example_trader").data ??
+    "example_trader";
   const [subject, setSubject] = useState(seed),
     [search, setSearch] = useState(seed),
     [mode, setMode] = useState(account?.mode ?? "example");
@@ -66,6 +85,9 @@ export function Workspace({
   );
   const [wallets, setWallets] = useState<Wallets | null>(null),
     [social, setSocial] = useState<Social | null>(null),
+    [coverage, setCoverage] = useState<ReturnType<
+      typeof schemas.coverage.parse
+    > | null>(null),
     [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [edges, setEdges] = useState<{ source: string; target: string }[]>([]),
     [tab, setTab] = useState("Graph"),
@@ -90,111 +112,154 @@ export function Workspace({
     [address, setAddress] = useState(""),
     [lastOp, setLastOp] = useState<Op | null>(null);
   useEffect(() => {
+    setHydrated(true);
     if (publicExample) return;
     let active = true;
-    Promise.all([
-      fetch("/api/history").then((r) => r.json()),
-      fetch("/api/session").then((r) => r.json()),
-    ])
-      .then(([h, s]) => {
-        if (active) {
-          if (h.ok) setHistory(h.data);
-          if (s.ok) setAllowance(s.data.allowance);
-        }
-      })
-      .catch(() => {});
+    void refreshResearchMetadata({
+      isCurrent: () => active,
+      history: setHistory,
+      allowance: setAllowance,
+    });
     return () => {
       active = false;
     };
   }, [publicExample]);
   const profile = profiles[subject],
     pnl = pnls[subject];
-  async function run<T>(
+  function applyResult(input: ResearchRequest, data: unknown) {
+    applyResearchResult(input, data, {
+      profile: (profile) => {
+        setProfiles((p) => ({ ...p, [profile.subject]: profile }));
+        setSubject(profile.subject);
+        setSearch(profile.subject);
+        setWallets(null);
+        setSocial(null);
+        setView("Research");
+      },
+      pnl: (data) => setPnls((p) => ({ ...p, [data.subject]: data })),
+      wallets: setWallets,
+      coverage: setCoverage,
+      leaderboard: setLeaderboard,
+      social: (data) => {
+        setSocial(data);
+        setProfiles((p) => ({
+          ...p,
+          ...Object.fromEntries(data.items.map((i) => [i.subject, i])),
+        }));
+        setEdges((old) =>
+          [
+            ...old,
+            ...data.items.map((i) =>
+              data.direction === "following"
+                ? { source: data.subject, target: i.subject }
+                : { source: i.subject, target: data.subject },
+            ),
+          ].filter(
+            (e, i, all) =>
+              all.findIndex(
+                (x) => x.source === e.source && x.target === e.target,
+              ) === i,
+          ),
+        );
+      },
+    });
+  }
+  async function refresh(version: number) {
+    const current = () => version === selectionVersion.current;
+    const ok = await refreshResearchMetadata({
+      isCurrent: current,
+      history: setHistory,
+      allowance: setAllowance,
+    });
+    if (!ok && current())
+      setMessage(
+        "Results retained. History or allowance could not refresh; reload to update them.",
+      );
+  }
+  async function run(
     kind: Kind,
     extra: Partial<ResearchRequest> = {},
-  ): Promise<T | undefined> {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      const input = requestSchema.parse({
-        id: crypto.randomUUID(),
-        actionId: crypto.randomUUID(),
-        kind,
-        subject,
-        window,
-        ...extra,
-      });
-      let data: unknown;
-      if (publicExample) {
-        data = exampleData(input, input.cursor ? Number(input.cursor) : 0);
-      } else {
-        const res = await fetch("/api/research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
+  ): Promise<void> {
+    const version = selectionVersion.current;
+    await withResearchRequest({
+      pending,
+      setBusy,
+      isCurrent: () => version === selectionVersion.current,
+      onBegin: () => {
+        setError("");
+        setMessage("");
+      },
+      onError: (message) => {
+        setError(message);
+        setLastOp((op) =>
+          op?.status === "running" ? { ...op, status: "uncertain" } : op,
+        );
+      },
+      execute: async () => {
+        const input = requestSchema.parse({
+          id: crypto.randomUUID(),
+          actionId: crypto.randomUUID(),
+          kind,
+          subject,
+          window,
+          ...extra,
         });
-        const json = await res.json();
-        if (!json.ok) {
-          setLastOp({ id: input.id, status: "failed", actualCredits: null });
-          throw new Error(json.error.message);
+        lastRequest.current = input;
+        lastRequestVersion.current = version;
+        setLastOp(
+          !publicExample && mode === "stored"
+            ? { id: input.id, status: "running" }
+            : null,
+        );
+        let data: unknown;
+        if (publicExample) {
+          data = exampleData(input, input.cursor ? Number(input.cursor) : 0);
+        } else {
+          const res = await fetch("/api/research", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(90000),
+          });
+          const json = await res.json();
+          if (version !== selectionVersion.current) return;
+          if (!res.ok || !json.ok) {
+            setLastOp(json.operation ?? null);
+            throw new Error(json.error?.message ?? "Research unavailable.");
+          }
+          if (json.data?.operation?.id !== input.id)
+            throw Error("Research operation does not match request.");
+          data = json.data.data;
+          setMode(json.mode);
+          setLastOp(json.data.operation);
         }
-        data = json.data.data;
-        setMode(json.mode);
-        setLastOp(json.data.operation);
-        const h = await fetch("/api/history").then((r) => r.json());
-        if (h.ok) setHistory(h.data);
-        const s = await fetch("/api/session").then((r) => r.json());
-        if (s.ok) setAllowance(s.data.allowance);
-      }
-      return data as T;
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Request failed. Try again explicitly.",
-      );
-    } finally {
-      setBusy(false);
-    }
+        if (version !== selectionVersion.current) return;
+        applyResult(input, data);
+        if (!publicExample) await refresh(version);
+      },
+    });
   }
+
   async function loadProfile(next = search) {
-    const data = await run<Profile>("profile", { subject: next });
-    if (data) {
-      setProfiles((p) => ({ ...p, [data.subject]: data }));
-      setSubject(data.subject);
-      setSearch(data.subject);
-      setWallets(null);
-      setSocial(null);
-      setView("Research");
-    }
+    await run("profile", { subject: next });
   }
   async function loadPnl(next = subject) {
-    const data = await run<Pnl>("pnl", { subject: next });
-    if (data) setPnls((p) => ({ ...p, [next]: data }));
+    await run("pnl", { subject: next });
   }
-  async function expand(cursor?: string) {
-    const data = await run<Social>("following", { cursor });
-    if (data) {
-      setSocial(data);
-      setProfiles((p) => ({
-        ...p,
-        ...Object.fromEntries(data.items.map((i) => [i.subject, i])),
-      }));
-      setEdges((old) =>
-        [
-          ...old,
-          ...data.items.map((i) => ({ source: subject, target: i.subject })),
-        ].filter(
-          (e, i, a) =>
-            a.findIndex(
-              (x) => x.source === e.source && x.target === e.target,
-            ) === i,
-        ),
-      );
-    }
+  async function expand(
+    cursor?: string,
+    direction: "following" | "followers" = "following",
+  ) {
+    await run(direction, {
+      cursor,
+      subject: cursor ? social?.subject : subject,
+    });
   }
   function select(next: string) {
+    selectionVersion.current += 1;
+    setLastOp(null);
+    setError("");
+    setMessage("");
     setSubject(next);
     setSearch(next);
     setWallets(null);
@@ -214,7 +279,7 @@ export function Workspace({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "comparison" }),
-      });
+      }).catch(() => {});
   }
   async function share() {
     try {
@@ -242,28 +307,30 @@ export function Workspace({
     }
   }
   async function recovery() {
-    if (!lastOp || publicExample) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/research/" + lastOp.id + "/recover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error.message);
-      setLastOp(json.data.operation);
-      setMessage(
-        "Recovery completed. Select the relevant action for a fresh view.",
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Recovery unavailable.");
-    } finally {
-      setBusy(false);
-    }
+    if (!lastOp || publicExample || pending.current) return;
+    const version = lastRequestVersion.current;
+    const r = lastRequest.current;
+    if (!r || r.id !== lastOp.id) return;
+    await recoverRequest({
+      operationId: lastOp.id,
+      pending,
+      setBusy,
+      isCurrent: () => version === selectionVersion.current,
+      onBegin: () => {
+        setError("");
+        setMessage("");
+      },
+      onError: setError,
+      onResult: async (json) => {
+        applyResult(r, json.data.data);
+        setLastOp(json.data.operation);
+        setMessage("Recovered results loaded.");
+        await refresh(version);
+      },
+    });
   }
   return (
-    <div className="app-shell">
+    <div className="app-shell" aria-busy={!hydrated} inert={!hydrated}>
       <aside className={"sidebar " + (drawer ? "open" : "")}>
         <Brand />
         <div className="sidebar-label">WORKSPACE</div>
@@ -317,12 +384,21 @@ export function Workspace({
             {account ? (
               <button
                 onClick={async () => {
-                  await fetch("/api/auth/signout", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: "{}",
-                  });
-                  globalThis.location.assign("/");
+                  try {
+                    const response = await fetch("/api/auth/signout", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: "{}",
+                    });
+                    const json = await response.json();
+                    if (!response.ok || !json.ok)
+                      throw Error("Sign out failed. Try again.");
+                    selectionVersion.current += 1;
+                    router.replace("/");
+                    router.refresh();
+                  } catch {
+                    setError("Sign out failed. Try again.");
+                  }
                 }}
               >
                 Sign out
@@ -348,7 +424,7 @@ export function Workspace({
               <p>
                 {mode === "example"
                   ? "You’re exploring synthetic data. No real trader results or upstream credits."
-                  : "Stored access is approved. Choose each request explicitly; no research runs on page load."}
+                  : "Research is available after email verification. Choose each request explicitly; no research runs on page load."}
               </p>
             </div>
             <span className="badge">
@@ -365,14 +441,15 @@ export function Workspace({
           )}
           {mode === "stored" && (
             <div className="cost-panel">
-              Proposed costs, pending contract verification: profile 1 + PnL 2
-              credits; following/leaderboard up to 1/page; wallets up to 10;
-              reverse up to 100. Stored dispatch is disabled until verified.
-              {allowance && (
+              Configured maximum reservations: profile 1 + PnL 2 credits;
+              following/leaderboard up to 1/page; wallets up to 10; reverse up
+              to 100. Mode:{" "}
+              {mode === "stored" ? "stored research" : "synthetic examples"}.
+              Upstream acceptance remains incomplete.
+              {account?.owner && allowance && (
                 <p>
-                  Today: {allowance.requestsUsed}/{allowance.requestLimit}{" "}
-                  requests · {allowance.creditsReservedOrUsed}/
-                  {allowance.creditLimit} credits used or reserved.
+                  Today: {allowance.requestsUsed} requests ·{" "}
+                  {allowance.creditsReservedOrUsed} credits used or reserved.
                 </p>
               )}
             </div>
@@ -409,6 +486,12 @@ export function Workspace({
                   </button>
                   <button disabled={busy} onClick={() => void expand()}>
                     Expand following
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => void expand(undefined, "followers")}
+                  >
+                    Load followers
                   </button>
                   <button onClick={() => void share()}>Share ↗</button>
                 </div>
@@ -479,9 +562,14 @@ export function Workspace({
                           social.nextCursor && (
                             <button
                               disabled={busy}
-                              onClick={() => void expand(social.nextCursor!)}
+                              onClick={() =>
+                                void expand(
+                                  social.nextCursor!,
+                                  social.direction,
+                                )
+                              }
                             >
-                              Load next following page
+                              Load next connections page
                             </button>
                           )
                         )}
@@ -534,14 +622,16 @@ export function Workspace({
                   <button
                     disabled={busy}
                     onClick={async () => {
-                      const d = await run<Wallets>("wallets");
-                      if (d) setWallets(d);
+                      await run("wallets");
                     }}
                   >
                     Resolve wallets
                   </button>
                   {wallets && (
                     <>
+                      {wallets.mappings.length === 0 && (
+                        <p>No wallet mappings returned for this observation.</p>
+                      )}
                       <p>
                         {wallets.count} mappings · {time(wallets.observedAt)}
                       </p>
@@ -570,15 +660,19 @@ export function Workspace({
                   <form
                     onSubmit={async (e) => {
                       e.preventDefault();
-                      const d = await run<Wallets>("reverse", { address });
-                      if (d) setWallets(d);
+                      await run("reverse", { address });
                     }}
                   >
                     <label htmlFor="wallet">Reverse wallet lookup</label>
                     <input
                       id="wallet"
                       value={address}
-                      onChange={(e) => setAddress(e.target.value)}
+                      onChange={(e) => {
+                        selectionVersion.current += 1;
+                        setLastOp(null);
+                        setWallets(null);
+                        setAddress(e.target.value);
+                      }}
                       placeholder="Wallet address"
                       minLength={10}
                       required
@@ -613,7 +707,12 @@ export function Workspace({
                         key={w}
                         aria-pressed={window === w}
                         className={window === w ? "selected" : ""}
-                        onClick={() => setWindow(w)}
+                        onClick={() => {
+                          selectionVersion.current += 1;
+                          setLastOp(null);
+                          setWindow(w);
+                          setLeaderboard(null);
+                        }}
                       >
                         <span>{w === "all" ? "All time" : w}</span>
                         <strong>{exact(pnl?.windows[w])}</strong>
@@ -643,6 +742,20 @@ export function Workspace({
                   </p>
                   <div className="evidence">
                     <h3>Evidence coverage</h3>
+                    <button
+                      disabled={busy}
+                      onClick={async () => {
+                        await run("coverage");
+                      }}
+                    >
+                      Load aggregate coverage
+                    </button>
+                    {coverage && (
+                      <p>
+                        {coverage.identities ?? "Unavailable"} identities ·{" "}
+                        {time(coverage.observedAt)} · {coverage.description}
+                      </p>
+                    )}
                     <p>
                       <strong>
                         {pnl
@@ -682,6 +795,8 @@ export function Workspace({
                   <select
                     value={window}
                     onChange={(e) => {
+                      selectionVersion.current += 1;
+                      setLastOp(null);
                       setWindow(e.target.value as typeof window);
                       setLeaderboard(null);
                     }}
@@ -696,14 +811,16 @@ export function Workspace({
                 className="primary"
                 disabled={busy}
                 onClick={async () => {
-                  const d = await run<Leaderboard>("leaderboard");
-                  if (d) setLeaderboard(d);
+                  await run("leaderboard");
                 }}
               >
                 Load leaderboard
               </button>
               {leaderboard && (
                 <>
+                  {leaderboard.items.length === 0 && (
+                    <p>No leaderboard records returned for this observation.</p>
+                  )}
                   <table>
                     <caption>
                       Sampled {leaderboard.window} PnL · up to ten records per
@@ -733,7 +850,13 @@ export function Workspace({
                               @{i.profile.subject}
                             </button>
                           </td>
-                          <td className="mono">{exact(i.pnl)}</td>
+                          <td className="mono">
+                            {exact(i.pnl)}
+                            <small>
+                              PnL: {time(i.fetchedAt)} · Profile:{" "}
+                              {time(i.profile.observedAt)}
+                            </small>
+                          </td>
                           <td>
                             <button
                               aria-label={"Compare " + i.profile.subject}
@@ -763,10 +886,10 @@ export function Workspace({
                       <button
                         disabled={busy}
                         onClick={async () => {
-                          const d = await run<Leaderboard>("leaderboard", {
+                          await run("leaderboard", {
                             cursor: leaderboard.nextCursor!,
+                            window: leaderboard.window,
                           });
-                          if (d) setLeaderboard(d);
                         }}
                       >
                         Load next page
@@ -825,8 +948,8 @@ export function Workspace({
             <section className="card">
               <h2>Private recent research</h2>
               <p>
-                Retained for 90 days. Selecting a record restores its handle
-                without executing research.
+                Retained for 90 days. Selecting a record restores its handle and
+                window or wallet address without executing research.
               </p>
               {publicExample ? (
                 <p>Sign in to keep private research history.</p>
@@ -838,7 +961,17 @@ export function Workspace({
                     <li key={h.id}>
                       <button
                         onClick={() => {
+                          selectionVersion.current += 1;
+                          setLastOp(null);
                           if (h.params.subject) select(h.params.subject);
+                          if (h.params.address) {
+                            setAddress(h.params.address);
+                            setWallets(null);
+                          }
+                          if (h.params.window) {
+                            setWindow(h.params.window);
+                            setLeaderboard(null);
+                          }
                           setView("Research");
                         }}
                       >
@@ -860,10 +993,16 @@ export function Workspace({
           {lastOp && (
             <div className="operation-meta fine">
               <span>
-                Operation {lastOp.id} · {lastOp.status} · Cost:{" "}
-                {lastOp.actualCredits === null
-                  ? "Unknown"
-                  : lastOp.actualCredits + " credits"}
+                Operation {lastOp.id} · {lastOp.status}
+                {account?.owner && (
+                  <>
+                    {" "}
+                    · Cost:{" "}
+                    {lastOp.actualCredits == null
+                      ? "Unknown"
+                      : lastOp.actualCredits + " credits"}
+                  </>
+                )}
               </span>
               {mode === "stored" && (
                 <button disabled={busy} onClick={() => void recovery()}>

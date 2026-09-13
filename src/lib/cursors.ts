@@ -16,7 +16,9 @@ export function signCursor(cursor: string, binding: string, now = Date.now()) {
 }
 export function readCursor(value: string, binding: string, now = Date.now()) {
   try {
-    const [payload, signature] = value.split(".");
+    const parts = value.split(".");
+    if (parts.length !== 2) throw new Error();
+    const [payload, signature] = parts;
     if (!signature || !equal(signature, keyed(config().CURSOR_SECRET, payload)))
       throw new Error();
     const data = schema.parse(

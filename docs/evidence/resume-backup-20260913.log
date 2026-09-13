@@ -1,0 +1,25 @@
+waiting for server to start.... done
+server started
+INSERT 0 2
+INSERT 0 1
+Encrypted backup: /opt/fomo-lens/continue-rehearsal-20260913T184415/backups/fomo-lens-20260913T184417-muk6BXCg
+Encrypted backup: /opt/fomo-lens/continue-rehearsal-20260913T184415/backups/fomo-lens-20260913T184417-GGbf8zab
+BEGIN
+SET
+DELETE 0
+INSERT 0 1
+DELETE 1
+COMMIT
+DO
+Isolated restore, deletion replay and fixture assertions passed.
+BEGIN
+SET
+DELETE 0
+INSERT 0 1
+DELETE 1
+COMMIT
+DO
+Isolated restore, deletion replay and fixture assertions passed.
+PASS: encrypted restore, current deletion replay, unresolved accounting, two daily backups, seven-day retention, corruption and cleanup failure.
+waiting for server to shut down.... done
+server stopped

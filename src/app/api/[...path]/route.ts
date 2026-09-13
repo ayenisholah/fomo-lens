@@ -6,7 +6,6 @@ import {
   SESSION_SECONDS,
   clientIP,
   isOwner,
-  lock,
   requestCode,
   requireOwner,
   requireUser,
@@ -33,11 +32,21 @@ export async function GET(req: Request, ctx: Context) {
     const path = (await ctx.params).path.join("/");
     if (path === "health/live") return success({ status: "alive" });
     if (path === "health/ready") {
-      await db().$queryRaw`SELECT 1 FROM users LIMIT 1`;
+      config();
+      await db().$queryRaw`SELECT id FROM users LIMIT 0`;
+      await db()
+        .$queryRaw`SELECT attempts, retry_at, upstream_balance FROM research_operations LIMIT 0`;
+      await db().$queryRaw`SELECT id FROM sessions LIMIT 0`;
+      await db().$queryRaw`SELECT id FROM auth_challenges LIMIT 0`;
+      await db().$queryRaw`SELECT key FROM budget_buckets LIMIT 0`;
+      await db().$queryRaw`SELECT key FROM rate_limit_buckets LIMIT 0`;
+      await db().$queryRaw`SELECT id FROM activity_events LIMIT 0`;
+      await db()
+        .$queryRaw`SELECT operation_id FROM accounting_retention LIMIT 0`;
       const migrations = await db().$queryRaw<
         { count: bigint }[]
-      >`SELECT count(*) FROM _prisma_migrations WHERE migration_name='202609100001_initial' AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
-      if (Number(migrations[0].count) !== 1)
+      >`SELECT count(*) FROM _prisma_migrations WHERE migration_name IN ('202609100001_initial','202609130001_recovery_metadata') AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
+      if (Number(migrations[0].count) !== 2)
         throw new AppError("schema", "Required schema is unavailable.", 503);
       return success({ status: "ready" });
     }
@@ -47,10 +56,9 @@ export async function GET(req: Request, ctx: Context) {
         {
           email: user.email,
           owner: isOwner(user.email),
-          storedApproved: user.storedApproved,
-          allowance: await allowance(user.id),
+          ...(isOwner(user.email) ? { allowance: await allowance() } : {}),
         },
-        effectiveMode(user),
+        effectiveMode(),
       );
     if (path === "history")
       return success(
@@ -127,7 +135,14 @@ export async function GET(req: Request, ctx: Context) {
         active7: active7.length,
         active30: active30.length,
         budgets,
-        upstreamBalance: null,
+        upstreamBalance:
+          (
+            await db().researchOperation.findFirst({
+              where: { upstreamBalance: { not: null } },
+              orderBy: { updatedAt: "desc" },
+              select: { upstreamBalance: true },
+            })
+          )?.upstreamBalance ?? null,
         userLimit: 200,
       });
     }
@@ -175,8 +190,25 @@ export async function POST(req: Request, ctx: Context) {
     }
     const user = await requireUser();
     if (path === "research") {
-      const result = await submit(user, requestSchema.parse(await body(req)));
-      return success(result, result.mode);
+      const input = requestSchema.parse(await body(req));
+      try {
+        const result = await submit(user, input);
+        return success(result, result.mode);
+      } catch (error) {
+        const response = await route(async () => {
+          throw error;
+        });
+        const payload = await response.json();
+        const status = await operation(user.id, input.id).catch(() => null);
+        return Response.json(
+          {
+            ...payload,
+            mode: effectiveMode(),
+            ...(status ? { operation: status } : {}),
+          },
+          { status: response.status, headers: response.headers },
+        );
+      }
     }
     if (/^research\/[^/]+\/recover$/.test(path)) {
       const result = await recover(
@@ -190,29 +222,9 @@ export async function POST(req: Request, ctx: Context) {
         .object({ type: z.enum(["comparison", "sharing"]) })
         .parse(await body(req));
       await db().activityEvent.create({
-        data: { userId: user.id, type: input.type, mode: effectiveMode(user) },
+        data: { userId: user.id, type: input.type, mode: effectiveMode() },
       });
       return success({ recorded: true });
-    }
-    if (path === "admin/access") {
-      await requireOwner();
-      const input = z
-        .object({ userId: z.string().uuid(), approved: z.boolean() })
-        .parse(await body(req));
-      await db().$transaction(async (tx) => {
-        await lock(tx, "approval:" + input.userId);
-        await tx.user.update({
-          where: { id: input.userId },
-          data: { storedApproved: input.approved },
-        });
-        await tx.activityEvent.create({
-          data: {
-            userId: user.id,
-            type: input.approved ? "access_approved" : "access_revoked",
-          },
-        });
-      });
-      return success({ updated: true });
     }
     throw new AppError("not_found", "Route not found.", 404);
   });

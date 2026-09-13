@@ -19,12 +19,8 @@ const schema = z.object({
   TEST_MAIL_DIR: z.string().optional(),
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   LOG_LEVEL: z.enum(["error", "warn", "info"]).default("error"),
-  USER_DAILY_REQUESTS: positive.default(20),
-  USER_DAILY_CREDITS: positive.default(20),
-  SERVICE_DAILY_REQUESTS: positive.default(200),
-  SERVICE_DAILY_CREDITS: positive.default(200),
   USER_CONCURRENCY: positive.default(1),
-  SERVICE_CONCURRENCY: positive.default(4),
+  SERVICE_CONCURRENCY: positive.max(1).default(1),
 });
 export function parseConfig(env: NodeJS.ProcessEnv) {
   const c = schema.parse(env);
@@ -32,6 +28,8 @@ export function parseConfig(env: NodeJS.ProcessEnv) {
     throw new Error("Use independent secrets");
   if (c.FOMOLENS_MODE === "stored" && !c.FOMOLENS_KEY)
     throw new Error("Stored mode requires FOMOLENS_KEY");
+  if (c.FOMOLENS_URL !== "https://api.fomolens.app")
+    throw new Error("Only the official Fomolens origin is supported");
   if (c.NODE_ENV === "production") {
     if (!c.APP_URL.startsWith("https://") || c.TRUST_PROXY !== "true")
       throw new Error("Production requires HTTPS and a private trusted proxy");
