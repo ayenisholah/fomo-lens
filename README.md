@@ -2,7 +2,7 @@
 
 A multi-user research application for exploring trader identities, observed connections, wallet mappings, and sampled PnL.
 
-**Development checkpoint, not a verified release.** Implementation is complete for this constrained checkpoint; `npm install` completed successfully and `npm run test` passed 91 tests across 9 files. Browser, integration, build and production checks remain unverified. See [HANDOFF.md](HANDOFF.md) for current status and interruption recovery, and [release verification](docs/release-verification.md) for actual outcomes.
+Free access for every verified user, with no application daily request or credit caps. One stored research request can run at a time; provider availability restrictions still apply. See [release verification](docs/release-verification.md) for CI, deployment and retained acceptance limitations.
 
 ## Stack
 
@@ -10,15 +10,15 @@ Next.js 16.3.4 App Router, strict TypeScript, React, Tailwind CSS, Prisma, Postg
 
 ## Local setup
 
-Use Node.js 22.12+ (Node 24 LTS recommended) and an existing PostgreSQL server.
-
-Dependencies and Prisma generation are complete. The only authorized verification command is:
+Use Node 24 and a dedicated PostgreSQL database. Preserve existing `.env` values.
 
 ```sh
-npm run test
+npm ci
+npm run setup
+# Configure the dedicated database and email settings in .env.
+npm run db:migrate
+npm run dev
 ```
-
-Existing `.env` values must be preserved. Other setup, migration, dev/start, build and release commands documented below are reference material, not instructions to execute in this session.
 
 Open http://localhost:3000. Public synthetic workspace: http://localhost:3000/example. Production uses native systemd and Nginx; Docker is not required.
 
@@ -41,6 +41,6 @@ Maintenance: `npm run maintenance`. Delete an account: `npm run account:delete -
 
 ## Deployment
 
-Native systemd/Nginx scripts are provided in `ops/`. They have not been production rehearsed. The production handoff requires server access, domain/DNS, a verified Resend sender, runtime secrets, and encrypted local backups. See [operations notes](docs/operations.md).
+GitHub CI checks pull requests and main on hosted Node 24 runners. Successful main checks automatically deploy their tested artifact through a dedicated restricted SSH account. Manual deployment accepts a successful main CI run ID. Native systemd/Nginx, encrypted backup restoration and code rollback have been rehearsed. See [operations notes](docs/operations.md).
 
-Runtime credentials belong in protected environment files, separately from release directories. No credential or deployment state was reverified in this continuation.
+Runtime credentials belong in protected environment files, separately from release directories. Provider keys can be rotated without rebuilding.

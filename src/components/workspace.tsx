@@ -447,11 +447,8 @@ export function Workspace({
           )}
           {mode === "stored" && (
             <div className="cost-panel">
-              Configured maximum reservations: profile 1 + PnL 2 credits;
-              following/leaderboard up to 1/page; wallets up to 10; reverse up
-              to 100. Mode:{" "}
-              {mode === "stored" ? "stored research" : "synthetic examples"}.
-              Upstream acceptance remains incomplete.
+              Free access for verified users. One research request can run at a
+              time. Provider availability may temporarily restrict requests.
               {account?.owner && allowance && (
                 <p>
                   Today: {allowance.requestsUsed} requests ·{" "}

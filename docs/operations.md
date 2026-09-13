@@ -1,26 +1,22 @@
-> Approved free-access plan (2026-09-13): no application request/credit caps. Current-key public launch is authorized after engineering checks. Historical billing restrictions below are superseded; preserve the private ledger and acceptance ceiling, and do not run paid acceptance automatically.
-
-> Current checkpoint (2026-09-13): implementation complete; release verification blocked. The permitted unit suite passes 91 tests across 9 files. See [../HANDOFF.md](../HANDOFF.md) for constraints and durable evidence. Operational and other verification commands below remain future reference only.
-
 # Native production operations
 
-Deployment is gated on passing local and production acceptance, verified email, encrypted local backup and restore, and a maximum of 120 pre-launch credits. No public deployment has been verified yet.
+Deploy only artifacts from successful main CI. Public launch is authorized with the current provider key; historical billing reconciliation is not a launch gate. Do not run paid acceptance automatically. The isolated restore, restart, outage and rollback rehearsals have passed; see [release verification](release-verification.md).
 
 Use the existing Node 24, PostgreSQL 16, Nginx and Certbot. Do not change other applications, PostgreSQL listeners or networking. Inspect disk and existing Nginx IP-specific listeners first. Stop if less than 1.5 GB would remain. Clean only obsolete Fomo Lens releases/build artifacts; retain current and previous releases.
 
 ## Provision once
 
-Create an unprivileged system user/group `fomo-lens`, `/opt/fomo-lens/{repository,releases,ops}`, `/etc/fomo-lens`, `/var/backups/fomo-lens`, and `/var/www/fomo-lens-acme`. Clone the repository into `repository`. Install the reviewed ops scripts into `ops` as root-owned executable files. Verify `/usr/bin/node` is Node 24 (adjust service paths if the server uses a different system installation).
+Create an unprivileged system user/group `fomo-lens`, `/opt/fomo-lens/{repository,releases,ops}`, `/etc/fomo-lens`, `/var/backups/fomo-lens`, and `/var/www/letsencrypt`. Clone the repository into `repository`. Install the reviewed ops scripts into `ops` as root-owned executable files. Verify `/usr/bin/node` is Node 24 (adjust service paths if the server uses a different system installation).
 
 Create a dedicated PostgreSQL role `fomo_lens` with LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE and a generated password, and a dedicated `fomo_lens` database owned by that role. Revoke PUBLIC database/schema privileges within that database only. Connect over loopback. Never reuse the other application's database or role.
 
 Generate separate random AUTH_SECRET, IP_HASH_SECRET, CURSOR_SECRET and database password. Store shell-compatible quoted settings in `/etc/fomo-lens/app.env`, root:fomo-lens mode 0640. Set APP_URL=https://fomo-lens.sholaayeni.xyz, TRUST_PROXY=true, FOMOLENS_MODE=stored, ADMIN_EMAILS=ayenisholah@yahoo.com, RESEND_FROM='Fomo Lens <noreply@sholaayeni.xyz>', no daily usage quotas and SERVICE_CONCURRENCY=1. Supply the server-held Fomolens and Resend keys. Secrets never enter release directories or builds.
 
-Install `ops/fomo-lens.service`. Immediately before initial activation check `ss -ltn 'sport = :3001'`; bind only 127.0.0.1:3001. Do not open a public application port.
+Install `ops/fomo-lens.service`. Immediately before initial activation check `ss -ltn 'sport = :3001'`; choose the first free port from 3001 upward and bind only to 127.0.0.1. The installer updates systemd, Nginx and the readiness URL together. Do not open a public application port.
 
 ## HTTPS
 
-Create a separate HTTP-only Nginx server block matching existing IP-specific listeners for this domain, serving the ACME webroot. Validate `nginx -t`, reload, then issue a dedicated certificate using `certbot certonly --webroot -w /var/www/fomo-lens-acme -d fomo-lens.sholaayeni.xyz --email ayenisholah@yahoo.com --agree-tos`. Install `ops/nginx.conf.template` after substituting the verified server IP. Validate and reload. Run a certificate renewal dry run and check the renewal timer. Verify the existing hosted application's HTTPS health after every reload.
+Create a separate HTTP-only Nginx server block matching existing IP-specific listeners for this domain, serving the ACME webroot. Validate `nginx -t`, reload, then issue a dedicated certificate using `certbot certonly --webroot -w /var/www/letsencrypt -d fomo-lens.sholaayeni.xyz --email ayenisholah@yahoo.com --agree-tos`. Install `ops/nginx.conf.template` after substituting the verified server IP. Validate and reload. Run a certificate renewal dry run and check the renewal timer. Verify the existing hosted application's HTTPS health after every reload.
 
 ## Backups and deletion
 
@@ -34,7 +30,7 @@ Run `ops/backup.sh` before every migration, including the initial empty-database
 
 ## Release and rollback
 
-Run the complete release gate, commit reviewed changes, fetch that exact commit into `repository`, and run `ops/deploy.sh FULL_SHA` as root. Builds run unprivileged without runtime credentials. Deployment takes a baseline backup, applies additive migrations, atomically switches `current`, and verifies readiness. Keep `previous`. Run `ops/rollback.sh` to revert code only; never reverse migrations or overwrite production data automatically.
+Use GitHub Deploy with a successful main CI run ID, or download its exact artifact and run `ops/deploy.sh FULL_SHA SHA256 < release.tar.gz` as root. The server does not rebuild. The guarded installer backs up, applies the existing reviewed migrations, switches `current` atomically and verifies readiness. Keep `previous`; use `ops/rollback.sh` for code-only rollback.
 
 Before public launch verify desktop/mobile flows, actual email sign-in, ownership, unlimited usage accounting, HTTPS, retained upstream acceptance limitations, backup restoration, rollback, process restart recovery and database-outage readiness. Scripts are implementation artifacts until those rehearsals pass.
 

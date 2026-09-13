@@ -1,0 +1,29 @@
+fomo-free-unit.log
+ Test Files  9 passed (9)
+      Tests  91 passed (91)
+
+fomo-free-integration.log
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+
+fomo-free-build-scan.log
+Build secret scan passed (2340 files; 0 absent tracked paths).
+
+fomo-free-offsite-restore.log
+Isolated restore, deletion replay and fixture assertions passed.
+
+fomo-free-release-rehearsal.log
+PASS: application startup and restart
+PASS: database-outage readiness/liveness and recovery
+PASS: code rollback and return to verified release
+PASS: INT/TERM before and after switch restore prior application
+PASS: failed release startup restores prior application
+PASS: SIGKILL switch inspection and explicit recovery
+
+fomo-free-ops-failure-check.log
+PASS: failed public readiness stops an unverifiable restored release
+PASS: stop failure is reported as CRITICAL with a failing status
+PASS: failed restoration does not report success
+
+fomo-live-check.log
+PASS: real email dispatch, public code verification, secure cookie, persistent session, owner access, ordinary-user redaction/403 and anonymous 401. No research dispatched.

@@ -6,13 +6,9 @@ Assessment: 2026-09-13. Target: https://fomo-lens.sholaayeni.xyz. Repository: ay
 
 ## Verified state
 
-The application implements email authentication, sessions, owner restrictions, public synthetic research, eight research actions, graph/list exploration, pagination, comparison, history, shared selections, accounting reservations and explicit recovery. Production acceptance remains incomplete.
+Free-access implementation and the complete engineering CI passed. The initial verified artifact is publicly deployed in stored mode; isolated backup restoration, restart, database outage, rollback, signal recovery and certificate renewal rehearsals passed. Production maintenance and backup timers are enabled. Runtime credentials and dedicated deployment secrets are synchronized.
 
-Saved unit evidence shows 91 passes. Fresh Node 24 isolated integration evidence shows 17 passes, including actual SIGKILL interruption and original-identity recovery. Clean lockfile installation succeeded with zero reported audit vulnerabilities. Encrypted restore/deletion/failure rehearsals passed. User confirmed email delivery and template approval.
-
-Browser evidence is incomplete. The clean production build and approved retry both failed on local process/port permissions; no build pass is established. Source changes remain uncommitted, including intentional Docker removals. Earlier README/checkpoint restrictions are stale and must be replaced with current evidence before publishing.
-
-DNS points to 45.67.128.88. Node 24.21.0, PostgreSQL, Nginx and Certbot are available. Nginx validation succeeds; certificate renewal timer is active. Port 3001 is currently free. No current Fomo Lens release or dedicated certificate exists. VPS free space is approximately 4.8 GB. Backup timer exists; maintenance is not installed.
+See [release verification](release-verification.md) for exact SHAs, workflow links, public authentication checks and retained provider limitations. The ordered plan below is preserved as the implementation scope, not a list of unexecuted gates.
 
 ## Ordered implementation
 
@@ -30,7 +26,7 @@ DNS points to 45.67.128.88. Node 24.21.0, PostgreSQL, Nginx and Certbot are avai
 
 Repository/server access, DNS and API keys have been supplied. No additional access credentials are currently needed. Dedicated automation credentials can be provisioned using existing access.
 
-The user's earlier instruction deferred billing until a future credit increase. A new API key alone does not establish that the increase is active. Preserve the private ledger's 14 confirmed plus 100 unresolved reserved credits; do not silently discard its history or make more paid requests. Live following, followers and successful reverse-wallet acceptance remain unverified. Before paid acceptance/public stored-mode launch, establish current provider entitlement and explicitly resolve or supersede the existing spending/launch constraint with the user.
+The approved free-access plan supersedes the earlier billing launch constraint. Preserve the private ledger's 14 confirmed plus 100 unresolved reserved credits and the acceptance runner's original 120-credit ceiling. Do not run additional paid acceptance automatically. Production user requests may use the current key's available credits. Live following, followers and successful reverse-wallet acceptance remain documented limitations, not launch blockers.
 
 An encrypted off-VPS copy and separately protected key exist locally. Automated off-server backup retention is not configured. A durable owner-selected backup destination is a follow-up operational decision; do not describe the manual copy as continuous disaster recovery.
 
