@@ -15,3 +15,5 @@ src/generated/
 .previous-release
 .previous-image
 ops.env
+
+__pycache__/

@@ -8,6 +8,7 @@ root=/opt/fomo-lens
 source "$root/ops/release-health.sh"
 exec 9>"$root/deploy.lock"
 flock -w 900 9
+python3 "$root/ops/deduplicate-releases.py" "$root"
 [[ $(node -p 'process.versions.node.split(".")[0]') == 24 ]]
 free_kb=$(df --output=avail "$root" | tail -1)
 (( free_kb >= 2621440 )) || { echo 'Insufficient disk for release and 1.5 GB reserve'; exit 1; }
@@ -36,6 +37,7 @@ PY
 fi
 rm -f "$archive"
 trap - EXIT
+python3 "$root/ops/deduplicate-releases.py" "$root"
 # Check the actual protected values against the tested build before activation.
 (cd "$release" && SECRET_SCAN_ENV_FILE=/etc/fomo-lens/app.env node scripts/scan-secrets.mjs --build)
 mkdir -p "$release/.next/standalone/.next/cache"
