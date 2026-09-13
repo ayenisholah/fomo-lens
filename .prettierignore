@@ -1,0 +1,9 @@
+node_modules
+.next
+package-lock.json
+prototype
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+src/generated/

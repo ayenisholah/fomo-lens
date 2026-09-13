@@ -1,0 +1,17 @@
+.env*
+!.env.example
+node_modules/
+.next/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+backups/
+.test-mail/
+.DS_Store
+src/generated/
+.deploy.lock
+.release
+.previous-release
+.previous-image
+ops.env
